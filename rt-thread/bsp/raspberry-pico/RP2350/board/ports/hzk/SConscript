@@ -1,0 +1,9 @@
+from building import *
+
+cwd = GetCurrentDir()
+src = ['hzk_core.c', 'hzk_uni2gb.c', 'hzk_port.c']
+CPPPATH = [cwd]
+
+group = DefineGroup('Drivers', src, depend = ['BSP_USING_LVGL'], CPPPATH = CPPPATH)
+
+Return('group')

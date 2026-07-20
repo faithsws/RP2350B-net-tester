@@ -1,0 +1,9 @@
+from building import *
+
+cwd = GetCurrentDir()
+src = Glob('*.c')
+CPPPATH = [cwd, cwd + '/../net_tester', cwd + '/..']
+
+group = DefineGroup('LVGL-demo', src, depend = ['BSP_USING_LVGL'], CPPPATH = CPPPATH)
+
+Return('group')

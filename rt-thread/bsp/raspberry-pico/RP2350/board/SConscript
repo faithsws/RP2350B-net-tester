@@ -1,0 +1,25 @@
+import os
+import rtconfig
+from building import *
+
+cwd = GetCurrentDir()
+objs = []
+
+# add general drivers
+src = Split('''
+board.c
+''')
+
+path =  [cwd, cwd + '/ports']
+path += [cwd + '/ports/lcd']
+
+if GetDepend(['BSP_USING_LVGL']):
+    path += [cwd + '/ports/lcd']
+
+group = DefineGroup('Drivers', src, depend = [''], CPPPATH = path)
+objs += group
+
+if os.path.isfile(os.path.join(cwd, 'ports', 'SConscript')):
+    objs += SConscript(os.path.join('ports', 'SConscript'))
+
+Return('objs')

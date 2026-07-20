@@ -1,0 +1,13 @@
+from building import *
+import os
+
+cwd = GetCurrentDir()
+src = Glob('*.c')
+CPPPATH = [cwd,
+           cwd + '/../../../board/ports/battery',
+           cwd + '/../../../board/ports/charger',
+           cwd + '/../../../board/ports/pwm']
+
+group = DefineGroup('LVGL-net-tester', src, depend = ['BSP_USING_LVGL'], CPPPATH = CPPPATH)
+
+Return('group')

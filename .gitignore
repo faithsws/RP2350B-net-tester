@@ -1,0 +1,21 @@
+# 构建产物
+**/build/
+**/build-ninja/
+**/.sconsign.dblite
+**/__pycache__/
+*.elf
+*.bin
+*.uf2
+*.map
+*.o
+*.obj
+*.log
+
+# IDE / 本地
+.vscode/
+.idea/
+*.user
+
+# 字库大文件与 SDK（本仓库不含，用宿主 RT-Thread / Pico SDK）
+**/packages/
+**/pico-sdk/

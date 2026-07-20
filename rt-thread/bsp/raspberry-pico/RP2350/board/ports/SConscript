@@ -1,0 +1,20 @@
+Import('RTT_ROOT')
+from building import *
+import os
+
+cwd = GetCurrentDir()
+
+src = ['power_hold.c', 'boost_pwr.c', 'battery/battery_adc.c', 'battery/power_status.c', 'charger/charger_detect.c', 'charger/charge_status.c', 'charger/charger_port.c', 'pwm/sc_link_pwm.c', 'mux4051/tmux4051.c', 'mux4051/tx_mux4051.c', 'mux4051/rx_mux4051.c', 'mux4051/link_mux4051.c', 'mux4051/mux4051_port.c', 'hc238/hc238.c', 'hc238/ctrl_h_hc238.c', 'hc238/ctrl_l_hc238.c', 'hc238/hc238_port.c']
+path = [cwd, cwd + '/..', cwd + '/battery', cwd + '/charger', cwd + '/pwm', cwd + '/mux4051', cwd + '/hc238', RTT_ROOT + '/components/drivers/spi']
+
+if GetDepend('BSP_USING_CH390'):
+    src += ['ch390_port.c']
+
+group = DefineGroup('Drivers', src, depend = [''], CPPPATH = path)
+
+if GetDepend('BSP_USING_LVGL'):
+    group = group + SConscript(os.path.join('lcd', 'SConscript'))
+    group = group + SConscript(os.path.join('ec11', 'SConscript'))
+    group = group + SConscript(os.path.join('hzk', 'SConscript'))
+
+Return('group')
