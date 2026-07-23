@@ -94,15 +94,20 @@ static lv_obj_t * pair_diagram;
 static lv_obj_t * pair_key_catcher;
 static lv_obj_t * pair_start_btn;
 static lv_obj_t * pair_start_lbl;
-static uint8_t pair_status[8];
+static pair_scan_result_t pair_result;
 static bool pair_has_result;
 
-/* 压接界面 */
+/* 对线状态色：断路灰 / 联通绿 / 短路红 */
+#define PAIR_ST_OPEN_COLOR   0x8A9099
+#define PAIR_ST_CONN_COLOR   0x2EBB55
+#define PAIR_ST_SHORT_COLOR  0xE04545
+
+/* 测序界面 */
 static lv_obj_t * crimp_diagram;
 static lv_obj_t * crimp_key_catcher;
 static lv_obj_t * crimp_start_btn;
 static lv_obj_t * crimp_start_lbl;
-static uint8_t crimp_status;
+static seq_scan_result_t seq_result;
 static bool crimp_has_result;
 
 /* T568B 线序配色：1白橙 2橙 3白绿 4蓝 5白蓝 6绿 7白棕 8棕 */
@@ -367,10 +372,21 @@ static void sub_key_cb(lv_event_t * e)
     }
 }
 
+static uint32_t pair_ch_color(uint8_t st)
+{
+    if(st == PAIR_CH_CONN) {
+        return PAIR_ST_CONN_COLOR;
+    }
+    if(st == PAIR_CH_SHORT) {
+        return PAIR_ST_SHORT_COLOR;
+    }
+    return PAIR_ST_OPEN_COLOR;
+}
+
 static void pair_ui_reset_state(void)
 {
     net_tester_pair_stop();
-    memset(pair_status, 0, sizeof(pair_status));
+    memset(&pair_result, 0, sizeof(pair_result));
     pair_has_result = false;
     if(pair_start_lbl) {
         lv_label_set_text(pair_start_lbl, "开始");
@@ -382,7 +398,7 @@ static void pair_ui_reset_state(void)
 
 static void pair_ui_set_waiting(void)
 {
-    memset(pair_status, 0, sizeof(pair_status));
+    memset(&pair_result, 0, sizeof(pair_result));
     pair_has_result = false;
     if(pair_start_lbl) {
         lv_label_set_text(pair_start_lbl, "测试中");
@@ -392,9 +408,14 @@ static void pair_ui_set_waiting(void)
     }
 }
 
-static void pair_ui_set_result(const uint8_t status[8])
+static void pair_ui_set_result(const pair_scan_result_t * result)
 {
-    memcpy(pair_status, status, sizeof(pair_status));
+    if(result) {
+        memcpy(&pair_result, result, sizeof(pair_result));
+    }
+    else {
+        memset(&pair_result, 0, sizeof(pair_result));
+    }
     pair_has_result = true;
     if(pair_start_lbl) {
         lv_label_set_text(pair_start_lbl, "开始");
@@ -404,10 +425,10 @@ static void pair_ui_set_result(const uint8_t status[8])
     }
 }
 
-static void pair_result_cb(const uint8_t status[8], void * user_data)
+static void pair_result_cb(const pair_scan_result_t * result, void * user_data)
 {
     LV_UNUSED(user_data);
-    pair_ui_set_result(status);
+    pair_ui_set_result(result);
 }
 
 static void pair_toggle_start(void)
@@ -461,24 +482,28 @@ static void pair_diagram_draw_cb(lv_event_t * e)
     lv_area_t coords;
     lv_obj_get_coords(obj, &coords);
 
-    const lv_coord_t left_x = coords.x1 + 28;
-    const lv_coord_t right_x = coords.x2 - 28;
-    const lv_coord_t top_y = coords.y1 + 22;
+    /* 横向布局：上方画线，底部圆点+标号 */
+    const lv_coord_t w = lv_area_get_width(&coords);
     const lv_coord_t h = lv_area_get_height(&coords);
-    const lv_coord_t pitch = (h - 30) / 7;
-    const lv_coord_t pin_r = 4;
+    const lv_coord_t pin_r = 5;
+    const lv_coord_t margin_x = 18;
+    const lv_coord_t pitch = (w - margin_x * 2) / 7;
+    const lv_coord_t pin_y = coords.y2 - 28;          /* 圆点行 */
+    const lv_coord_t num_y = coords.y2 - 14;          /* 标号行 */
+    const lv_coord_t line_base = pin_y - pin_r - 2;   /* 连线起点在圆点上方 */
 
     lv_draw_label_dsc_t title_dsc;
     lv_draw_label_dsc_init(&title_dsc);
     title_dsc.font = hzk12_font_get();
     title_dsc.color = lv_color_hex(CLR_PAIR);
     title_dsc.align = LV_TEXT_ALIGN_CENTER;
+    lv_area_t title = {coords.x1 + 10, coords.y1 + 2, coords.x2 - 10, coords.y1 + 16};
+    lv_draw_label(draw_ctx, &title_dsc, &title, "通道状态", NULL);
 
-    lv_area_t a_title = {coords.x1 + 4, coords.y1 + 2, coords.x1 + 60, coords.y1 + 16};
-    lv_draw_label(draw_ctx, &title_dsc, &a_title, "A端", NULL);
-
-    lv_area_t b_title = {coords.x2 - 60, coords.y1 + 2, coords.x2 - 4, coords.y1 + 16};
-    lv_draw_label(draw_ctx, &title_dsc, &b_title, "B端", NULL);
+    lv_coord_t pin_xs[PAIR_CH_COUNT];
+    for(int i = 0; i < PAIR_CH_COUNT; i++) {
+        pin_xs[i] = coords.x1 + margin_x + i * pitch;
+    }
 
     if(pair_has_result) {
         lv_draw_line_dsc_t line_dsc;
@@ -488,14 +513,44 @@ static void pair_diagram_draw_cb(lv_event_t * e)
         line_dsc.round_start = 1;
         line_dsc.round_end = 1;
 
-        for(int i = 0; i < 8; i++) {
-            for(int j = 0; j < 8; j++) {
-                if(!(pair_status[i] & (1u << j))) continue;
+        /* 联通：自圆点向上的绿色竖线 */
+        line_dsc.color = lv_color_hex(PAIR_ST_CONN_COLOR);
+        for(int i = 0; i < PAIR_CH_COUNT; i++) {
+            if(pair_result.ch_state[i] != PAIR_CH_CONN) {
+                continue;
+            }
+            lv_point_t p1 = {pin_xs[i], line_base};
+            lv_point_t p2 = {pin_xs[i], (lv_coord_t)(line_base - 22)};
+            lv_draw_line(draw_ctx, &line_dsc, &p1, &p2);
+        }
 
-                line_dsc.color = lv_color_hex(PAIR_WIRE_COLOR[i]);
-                lv_point_t p1 = {left_x, (lv_coord_t)(top_y + i * pitch)};
-                lv_point_t p2 = {right_x, (lv_coord_t)(top_y + j * pitch)};
-                lv_draw_line(draw_ctx, &line_dsc, &p1, &p2);
+        /* 短路：圆点上方拱形折线（跨度越大拱越高） */
+        line_dsc.color = lv_color_hex(PAIR_ST_SHORT_COLOR);
+        for(int i = 0; i < PAIR_CH_COUNT; i++) {
+            for(int j = i + 1; j < PAIR_CH_COUNT; j++) {
+                lv_coord_t arch_h;
+                lv_coord_t mid_y;
+                lv_point_t p1, pm, p2;
+
+                if(!(pair_result.short_bits[i] & (1u << j))) {
+                    continue;
+                }
+                arch_h = 18 + (lv_coord_t)((j - i) * 8);
+                if(arch_h > h - 50) {
+                    arch_h = (lv_coord_t)(h - 50);
+                }
+                if(arch_h < 18) {
+                    arch_h = 18;
+                }
+                mid_y = line_base - arch_h;
+                p1.x = pin_xs[i];
+                p1.y = line_base;
+                pm.x = (lv_coord_t)((pin_xs[i] + pin_xs[j]) / 2);
+                pm.y = mid_y;
+                p2.x = pin_xs[j];
+                p2.y = line_base;
+                lv_draw_line(draw_ctx, &line_dsc, &p1, &pm);
+                lv_draw_line(draw_ctx, &line_dsc, &pm, &p2);
             }
         }
     }
@@ -514,22 +569,21 @@ static void pair_diagram_draw_cb(lv_event_t * e)
     num_dsc.color = lv_color_hex(UI_FOOTER);
     num_dsc.align = LV_TEXT_ALIGN_CENTER;
 
-    for(int i = 0; i < 8; i++) {
-        lv_coord_t y = top_y + i * pitch;
-        pin_dsc.bg_color = lv_color_hex(PAIR_WIRE_COLOR[i]);
+    for(int i = 0; i < PAIR_CH_COUNT; i++) {
+        lv_coord_t x = pin_xs[i];
 
-        lv_area_t pin_l = {left_x - pin_r, y - pin_r, left_x + pin_r, y + pin_r};
-        lv_draw_rect(draw_ctx, &pin_dsc, &pin_l);
-
-        lv_area_t pin_r_area = {right_x - pin_r, y - pin_r, right_x + pin_r, y + pin_r};
-        lv_draw_rect(draw_ctx, &pin_dsc, &pin_r_area);
+        if(pair_has_result) {
+            pin_dsc.bg_color = lv_color_hex(pair_ch_color(pair_result.ch_state[i]));
+        }
+        else {
+            pin_dsc.bg_color = lv_color_hex(PAIR_WIRE_COLOR[i]);
+        }
+        lv_area_t pin = {x - pin_r, pin_y - pin_r, x + pin_r, pin_y + pin_r};
+        lv_draw_rect(draw_ctx, &pin_dsc, &pin);
 
         char num[2] = {(char)('1' + i), '\0'};
-        lv_area_t n_l = {coords.x1 + 2, y - 6, left_x - pin_r - 2, y + 6};
-        lv_draw_label(draw_ctx, &num_dsc, &n_l, num, NULL);
-
-        lv_area_t n_r = {right_x + pin_r + 2, y - 6, coords.x2 - 2, y + 6};
-        lv_draw_label(draw_ctx, &num_dsc, &n_r, num, NULL);
+        lv_area_t n_area = {x - 8, num_y, x + 8, coords.y2 - 2};
+        lv_draw_label(draw_ctx, &num_dsc, &n_area, num, NULL);
     }
 }
 
@@ -647,7 +701,10 @@ static lv_obj_t * create_pair_screen(void)
 static void crimp_ui_reset_state(void)
 {
     net_tester_crimp_stop();
-    crimp_status = 0;
+    memset(&seq_result, 0, sizeof(seq_result));
+    for(int i = 0; i < PAIR_CH_COUNT; i++) {
+        seq_result.map_to[i] = SEQ_MAP_NONE;
+    }
     crimp_has_result = false;
     if(crimp_start_lbl) {
         lv_label_set_text(crimp_start_lbl, "开始");
@@ -659,19 +716,30 @@ static void crimp_ui_reset_state(void)
 
 static void crimp_ui_set_waiting(void)
 {
-    crimp_status = 0;
+    memset(&seq_result, 0, sizeof(seq_result));
+    for(int i = 0; i < PAIR_CH_COUNT; i++) {
+        seq_result.map_to[i] = SEQ_MAP_NONE;
+    }
     crimp_has_result = false;
     if(crimp_start_lbl) {
-        lv_label_set_text(crimp_start_lbl, "测试中");
+        lv_label_set_text(crimp_start_lbl, "测序中");
     }
     if(crimp_diagram) {
         lv_obj_invalidate(crimp_diagram);
     }
 }
 
-static void crimp_ui_set_result(uint8_t status)
+static void crimp_ui_set_result(const seq_scan_result_t * result)
 {
-    crimp_status = status;
+    if(result) {
+        memcpy(&seq_result, result, sizeof(seq_result));
+    }
+    else {
+        memset(&seq_result, 0, sizeof(seq_result));
+        for(int i = 0; i < PAIR_CH_COUNT; i++) {
+            seq_result.map_to[i] = SEQ_MAP_NONE;
+        }
+    }
     crimp_has_result = true;
     if(crimp_start_lbl) {
         lv_label_set_text(crimp_start_lbl, "开始");
@@ -681,16 +749,17 @@ static void crimp_ui_set_result(uint8_t status)
     }
 }
 
-static void crimp_result_cb(uint8_t status, void * user_data)
+static void crimp_result_cb(const seq_scan_result_t * result, void * user_data)
 {
     LV_UNUSED(user_data);
-    crimp_ui_set_result(status);
+    crimp_ui_set_result(result);
 }
 
 static void crimp_toggle_start(void)
 {
-    net_tester_crimp_start();
-    crimp_ui_set_waiting();
+    if(net_tester_crimp_start()) {
+        crimp_ui_set_waiting();
+    }
 }
 
 static void crimp_apply_focus_style(bool focused)
@@ -736,34 +805,53 @@ static void crimp_diagram_draw_cb(lv_event_t * e)
     lv_area_t coords;
     lv_obj_get_coords(obj, &coords);
 
-    const lv_coord_t w = lv_area_get_width(&coords);
+    const lv_coord_t left_x = coords.x1 + 28;
+    const lv_coord_t right_x = coords.x2 - 28;
+    const lv_coord_t top_y = coords.y1 + 22;
     const lv_coord_t h = lv_area_get_height(&coords);
-    const lv_coord_t bar_w = 16;
-    const lv_coord_t gap = 8;
-    const lv_coord_t total_w = 8 * bar_w + 7 * gap;
-    const lv_coord_t start_x = coords.x1 + (w - total_w) / 2;
-    /* 顶部留给标题/提示，底部留给线号，避免重叠 */
-    const lv_coord_t top_reserve = 40;
-    const lv_coord_t bottom_reserve = 26;
-    const lv_coord_t bar_top = coords.y1 + top_reserve;
-    const lv_coord_t bar_h = h - top_reserve - bottom_reserve;
-    const lv_coord_t bar_bottom = bar_top + (bar_h > 40 ? bar_h : 40) - 1;
+    const lv_coord_t pitch = (h - 30) / 7;
+    const lv_coord_t pin_r = 4;
 
     lv_draw_label_dsc_t title_dsc;
     lv_draw_label_dsc_init(&title_dsc);
     title_dsc.font = hzk12_font_get();
     title_dsc.color = lv_color_hex(CLR_CRIMP);
     title_dsc.align = LV_TEXT_ALIGN_CENTER;
-    lv_area_t title_area = {coords.x1 + 10, coords.y1 + 4, coords.x2 - 10, coords.y1 + 18};
-    lv_draw_label(draw_ctx, &title_dsc, &title_area, "水晶头压接", NULL);
 
-    lv_draw_rect_dsc_t bar_dsc;
-    lv_draw_rect_dsc_init(&bar_dsc);
-    bar_dsc.radius = 2;
-    bar_dsc.bg_opa = LV_OPA_COVER;
-    bar_dsc.border_width = 1;
-    bar_dsc.border_color = lv_color_hex(0x203040);
-    bar_dsc.border_opa = LV_OPA_COVER;
+    lv_area_t a_title = {coords.x1 + 4, coords.y1 + 2, coords.x1 + 60, coords.y1 + 16};
+    lv_draw_label(draw_ctx, &title_dsc, &a_title, "本端", NULL);
+
+    lv_area_t b_title = {coords.x2 - 60, coords.y1 + 2, coords.x2 - 4, coords.y1 + 16};
+    lv_draw_label(draw_ctx, &title_dsc, &b_title, "对端", NULL);
+
+    if(crimp_has_result) {
+        lv_draw_line_dsc_t line_dsc;
+        lv_draw_line_dsc_init(&line_dsc);
+        line_dsc.width = 2;
+        line_dsc.opa = LV_OPA_COVER;
+        line_dsc.round_start = 1;
+        line_dsc.round_end = 1;
+
+        for(int i = 0; i < PAIR_CH_COUNT; i++) {
+            int8_t mid = seq_result.map_to[i];
+            if(mid < 0 || mid >= PAIR_CH_COUNT) {
+                continue;
+            }
+            /* 直通绿，错序黄 */
+            line_dsc.color = lv_color_hex(mid == i ? PAIR_ST_CONN_COLOR : 0xE0A020);
+            lv_point_t p1 = {left_x, (lv_coord_t)(top_y + i * pitch)};
+            lv_point_t p2 = {right_x, (lv_coord_t)(top_y + mid * pitch)};
+            lv_draw_line(draw_ctx, &line_dsc, &p1, &p2);
+        }
+    }
+
+    lv_draw_rect_dsc_t pin_dsc;
+    lv_draw_rect_dsc_init(&pin_dsc);
+    pin_dsc.radius = LV_RADIUS_CIRCLE;
+    pin_dsc.bg_opa = LV_OPA_COVER;
+    pin_dsc.border_width = 1;
+    pin_dsc.border_color = lv_color_hex(0x203040);
+    pin_dsc.border_opa = LV_OPA_COVER;
 
     lv_draw_label_dsc_t num_dsc;
     lv_draw_label_dsc_init(&num_dsc);
@@ -771,20 +859,39 @@ static void crimp_diagram_draw_cb(lv_event_t * e)
     num_dsc.color = lv_color_hex(UI_FOOTER);
     num_dsc.align = LV_TEXT_ALIGN_CENTER;
 
-    for(int i = 0; i < 8; i++) {
-        lv_coord_t x1 = start_x + i * (bar_w + gap);
-        lv_coord_t x2 = x1 + bar_w - 1;
+    for(int i = 0; i < PAIR_CH_COUNT; i++) {
+        lv_coord_t y = top_y + i * pitch;
 
-        bool ok = crimp_has_result && (crimp_status & (1u << i));
-        /* 无结果或等待中：全部灰色；有结果：绿=牢固，灰=未压接 */
-        bar_dsc.bg_color = lv_color_hex(ok ? CRIMP_OK_COLOR : CRIMP_BAD_COLOR);
+        /* 本端针脚：有映射则按直通/错序着色 */
+        if(crimp_has_result) {
+            int8_t mid = seq_result.map_to[i];
+            if(mid < 0) {
+                pin_dsc.bg_color = lv_color_hex(PAIR_ST_OPEN_COLOR);
+            }
+            else if(mid == i) {
+                pin_dsc.bg_color = lv_color_hex(PAIR_ST_CONN_COLOR);
+            }
+            else {
+                pin_dsc.bg_color = lv_color_hex(0xE0A020);
+            }
+        }
+        else {
+            pin_dsc.bg_color = lv_color_hex(PAIR_WIRE_COLOR[i]);
+        }
+        lv_area_t pin_l = {left_x - pin_r, y - pin_r, left_x + pin_r, y + pin_r};
+        lv_draw_rect(draw_ctx, &pin_dsc, &pin_l);
 
-        lv_area_t bar = {x1, bar_top, x2, bar_bottom};
-        lv_draw_rect(draw_ctx, &bar_dsc, &bar);
+        /* 对端针脚：线序色 */
+        pin_dsc.bg_color = lv_color_hex(PAIR_WIRE_COLOR[i]);
+        lv_area_t pin_r_area = {right_x - pin_r, y - pin_r, right_x + pin_r, y + pin_r};
+        lv_draw_rect(draw_ctx, &pin_dsc, &pin_r_area);
 
         char num[2] = {(char)('1' + i), '\0'};
-        lv_area_t n_area = {x1 - 2, bar_bottom + 4, x2 + 2, coords.y2 - 2};
-        lv_draw_label(draw_ctx, &num_dsc, &n_area, num, NULL);
+        lv_area_t n_l = {coords.x1 + 2, y - 6, left_x - pin_r - 2, y + 6};
+        lv_draw_label(draw_ctx, &num_dsc, &n_l, num, NULL);
+
+        lv_area_t n_r = {right_x + pin_r + 2, y - 6, coords.x2 - 2, y + 6};
+        lv_draw_label(draw_ctx, &num_dsc, &n_r, num, NULL);
     }
 }
 
@@ -846,7 +953,7 @@ static lv_obj_t * create_crimp_screen(void)
     lv_obj_t * scr = lv_obj_create(NULL);
     style_screen_bg(scr);
 
-    create_header(scr, "压接");
+    create_header(scr, "测序");
 
     lv_obj_t * body = lv_obj_create(scr);
     lv_obj_remove_style_all(body);
@@ -1237,10 +1344,10 @@ static lv_obj_t * create_menu_tile(lv_obj_t * parent, net_func_id_t id, int col,
 {
     const lv_font_t * font = UI_CN_FONT;
 
-    static const char * names[MENU_COUNT] = {"寻线", "压接", "对线", "调试"};
+    static const char * names[MENU_COUNT] = {"寻线", "测序", "对线", "调试"};
     static const char * icons[MENU_COUNT] = {
         LV_SYMBOL_GPS,       /* 寻线 ≈ fa-route */
-        LV_SYMBOL_USB,       /* 压接 ≈ fa-plug */
+        LV_SYMBOL_USB,       /* 测序 */
         LV_SYMBOL_LOOP,      /* 对线 ≈ fa-link */
         LV_SYMBOL_LIST,      /* 调试 ≈ fa-terminal */
     };

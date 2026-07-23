@@ -1,9 +1,9 @@
 /*
- * 74HC238 FinSH 调试命令 + 对线扫描
+ * 74HC238 FinSH 调试命令 + H 桥扫描（仅采样）
  *
- * pair_scan：扫描前打开升压；56 步各开一对 PMOS/NMOS，
- * 每步对 CD4051 通道 0~7 依次采样（切通道等 20ms）并打印电压。
- * 连通性判定暂不实现，等实测规律后再补。
+ * 扫描前打开升压；56 步各开一对 PMOS/NMOS，
+ * 每步对 CD4051 通道 0~7 依次采样，电压写入 V[H][L][MUX]；
+ * 扫描结束后回调，由上层调用 pair_judge / seq_judge。
  */
 #include "ctrl_h_hc238.h"
 #include "ctrl_l_hc238.h"
@@ -14,11 +14,11 @@
 
 #include <string.h>
 
-#define PAIR_SCAN_BOOST_MS      50   /* 升压稳定等待 */
-#define PAIR_SCAN_HL_SETTLE_MS  20  /* ctrl_h/ctrl_l 切换后等待 */
-#define PAIR_SCAN_MUX_SETTLE_MS 20   /* CD4051 切通道后等待再采样 */
-#define PAIR_SCAN_HOLD_MS       10  /* 每对 H/L 采样后保持延时 */
-#define PAIR_SCAN_STACK         2048
+#define PAIR_SCAN_BOOST_MS      50
+#define PAIR_SCAN_HL_SETTLE_MS  20
+#define PAIR_SCAN_MUX_SETTLE_MS 20
+#define PAIR_SCAN_HOLD_MS       10
+#define PAIR_SCAN_STACK         3072
 #define PAIR_SCAN_PRIO          (RT_THREAD_PRIORITY_MAX / 2 + 2)
 #define PAIR_SCAN_TOTAL         (8 * 7)
 
@@ -28,6 +28,9 @@ static rt_thread_t pair_scan_tid = RT_NULL;
 
 static pair_scan_done_cb_t pair_scan_done_cb = RT_NULL;
 static void *pair_scan_done_user = RT_NULL;
+
+/* 三维电压：真实电压 mV（已 ×3）；H==L 为 INVALID */
+static pair_volt_cube_t s_volt_mv;
 
 rt_err_t hc238_hbridge_on(rt_uint8_t pmos_ch, rt_uint8_t nmos_ch)
 {
@@ -64,7 +67,11 @@ rt_bool_t pair_scan_is_running(void)
     return pair_scan_running;
 }
 
-/* 关 H 桥、4051、升压 */
+const pair_volt_cube_t *pair_scan_get_volt(void)
+{
+    return &s_volt_mv;
+}
+
 static void pair_scan_hw_off(void)
 {
     link4051_enable(RT_FALSE);
@@ -72,7 +79,23 @@ static void pair_scan_hw_off(void)
     boost_pwr_off();
 }
 
-/* H/L 已设定：依次切换 CD4051 通道 0~7 采样并打印，不做连通判断 */
+static void pair_volt_clear(void)
+{
+    int h, l, m;
+
+    for (h = 0; h < PAIR_CH_COUNT; h++)
+    {
+        for (l = 0; l < PAIR_CH_COUNT; l++)
+        {
+            for (m = 0; m < PAIR_CH_COUNT; m++)
+            {
+                s_volt_mv[h][l][m] = PAIR_SCAN_INVALID_MV;
+            }
+        }
+    }
+}
+
+/* H/L 已设定：依次采 MUX 0~7，写入 V[h][l][m] */
 static void pair_scan_sample_all_mux(int step,
                                     rt_uint8_t pmos_ch,
                                     rt_uint8_t nmos_ch)
@@ -91,6 +114,11 @@ static void pair_scan_sample_all_mux(int step,
 
         pin_mv = link_adc_read_pin_mv();
         real_mv = link_adc_read_mv();
+        if (real_mv > 0xFFFEu)
+        {
+            real_mv = 0xFFFEu;
+        }
+        s_volt_mv[pmos_ch][nmos_ch][adc_ch] = (uint16_t)real_mv;
 
         rt_kprintf("[PAIR_SCAN] %2d/%d  H=Y%u L=Y%u  MUX=Y%u  pin=%umV  V=%u.%03uV\n",
                    step, PAIR_SCAN_TOTAL,
@@ -108,17 +136,15 @@ static void pair_scan_thread_entry(void *parameter)
     rt_uint8_t pmos;
     rt_uint8_t nmos;
     int step = 0;
-    uint8_t status[8];
     rt_bool_t aborted;
 
     RT_UNUSED(parameter);
-    /* 暂不判定连通，上报全 0 矩阵 */
-    memset(status, 0, sizeof(status));
+    pair_volt_clear();
 
     boost_pwr_on();
     rt_thread_mdelay(PAIR_SCAN_BOOST_MS);
     rt_kprintf("[PAIR_SCAN] boost on (GPIO%d=HIGH)\n", BOOST_PWR_EN_PIN);
-    rt_kprintf("[PAIR_SCAN] start: hl_settle=%dms mux_settle=%dms total=%d (no CONN judge)\n",
+    rt_kprintf("[PAIR_SCAN] start: hl=%dms mux=%dms total=%d\n",
                PAIR_SCAN_HL_SETTLE_MS, PAIR_SCAN_MUX_SETTLE_MS, PAIR_SCAN_TOTAL);
 
     for (pmos = 0; pmos <= HC238_CHANNEL_MAX && !pair_scan_abort; pmos++)
@@ -154,13 +180,12 @@ static void pair_scan_thread_entry(void *parameter)
     }
     else
     {
-        rt_kprintf("[PAIR_SCAN] done, %d/%d H-L steps (each mux 0-7)\n",
-                   step, PAIR_SCAN_TOTAL);
+        rt_kprintf("[PAIR_SCAN] done, %d/%d H-L steps\n", step, PAIR_SCAN_TOTAL);
     }
 
     if (pair_scan_done_cb)
     {
-        pair_scan_done_cb(aborted ? RT_NULL : status, aborted, pair_scan_done_user);
+        pair_scan_done_cb(aborted, pair_scan_done_user);
     }
 }
 

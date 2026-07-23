@@ -292,6 +292,8 @@ SET(RT_DRIVERS_SOURCES
 	board/ports/hc238/ctrl_l_hc238.c
 	board/ports/hc238/hc238.c
 	board/ports/hc238/hc238_port.c
+	board/ports/hc238/pair_judge.c
+	board/ports/hc238/seq_judge.c
 	board/ports/hzk/hzk_core.c
 	board/ports/hzk/hzk_port.c
 	board/ports/hzk/hzk_uni2gb.c
