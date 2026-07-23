@@ -3,6 +3,42 @@
 基于 **RT-Thread + RP2350B** 的网络巡线 / 测序 / 对线 / 网络调试固件。  
 本仓库保存相对上游 RT-Thread 的**产品侧依赖代码**（BSP、板级驱动、CH390、LVGL 业务），需叠加到完整 `rt-thread` + Pico SDK 工程中编译。
 
+## 依赖版本（已锁定）
+
+详见 [`VERSIONS.md`](VERSIONS.md) / [`deps.json`](deps.json)：
+
+| 组件 | 版本 | Commit |
+|------|------|--------|
+| RT-Thread | 5.3.0 | `8a0fe09c` |
+| Pico RP2350 SDK 包 | 2.1.1 | `66beae4` |
+| LVGL | 8.3 | `f2c1032` |
+
+**不固定版本直接拉 `*-latest` 会导致编译或行为不匹配。** 请使用下方恢复脚本。
+
+## 一键恢复可编译工程
+
+```bat
+scripts\restore_workspace.bat
+```
+
+默认输出到同级目录 `..\RP2350B-RT-Thread`，并自动编译。指定目录：
+
+```bat
+scripts\restore_workspace.bat D:\work\RP2350B-RT-Thread
+```
+
+仅恢复、不编译：
+
+```powershell
+.\scripts\restore_workspace.ps1 -OutDir ..\RP2350B-RT-Thread -SkipBuild
+```
+
+成功后产物：
+
+`\<OutDir>\rt-thread\bsp\raspberry-pico\RP2350\build-ninja\rtthread.elf`
+
+前置：已安装 `arm-none-eabi-gcc`、CMake、Git、Python3。Ninja/scons 可由 `setup_env.bat` 自动准备。
+
 ## 功能概览
 
 | 模块 | 说明 |
@@ -17,12 +53,18 @@
 ## 仓库结构
 
 ```text
+assets/                     # HZK12 / HZK16 字库
+deps.json / VERSIONS.md     # 依赖版本锁定
+scripts/
+  restore_workspace.*       # 一键恢复+编译
+  setup_env.bat / build_bs2.bat
+  pair_scan_analyze.py / seq_scan_analyze.py
+build.bat                   # 宿主工程编译入口（恢复后复制）
 rt-thread/
   bsp/raspberry-pico/
     RP2350/                 # 产品 BSP（applications / board / ports / LVGL）
     libraries/Drivers/      # 改过的 drv_gpio / drv_spi / drv_uart
   components/drivers/spi/   # CH390 驱动 + Kconfig/SConscript
-scripts/                    # 对线/测序离线分析脚本
 ```
 
 ## 板级驱动依赖（`board/ports`）
@@ -66,14 +108,11 @@ python scripts/pair_scan_analyze.py --log test-logs/xxx.log
 python scripts/seq_scan_analyze.py --log test-logs/测序1.log
 ```
 
-## 编译提示
+## 烧录
 
-宿主工程路径示例：`…/RP2350B-RT-Thread/rt-thread/bsp/raspberry-pico/RP2350`
-
-1. 将本仓库对应文件覆盖/合并进完整 RT-Thread 树
-2. `scons --target=cmake` 后用 Ninja 构建，或沿用工程内 `build-ninja`
-3. UF2：`picotool uf2 convert rtthread.elf rtthread.uf2 --family rp2350-arm-s --abs-block`
-4. 烧录：DebugControl **COM16** BOOT/RUN；FinSH **COM14**；或 CMSIS-DAP `pyocd load -t rp2350`
+- UF2：`picotool uf2 convert rtthread.elf rtthread.uf2 --family rp2350-arm-s --abs-block`
+- DebugControl **COM16** BOOT/RUN；FinSH **COM14**
+- 或 CMSIS-DAP：`pyocd load -t rp2350 rtthread.elf`
 
 ## 调试串口常用命令
 

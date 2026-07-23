@@ -1,0 +1,34 @@
+{
+  "rt-thread": {
+    "version": "5.3.0",
+    "url": "https://gitee.com/rtthread/rt-thread.git",
+    "url_fallback": "https://github.com/RT-Thread/rt-thread.git",
+    "commit": "8a0fe09c659b74ed2543d87a36a12355053b2630"
+  },
+  "pico_rp2350_sdk": {
+    "version": "2.1.1",
+    "package_name": "raspberrypi-pico-rp2350-sdk-latest",
+    "url": "https://gitee.com/RT-Thread-Mirror/raspberrypi-pico-rp2350-sdk.git",
+    "commit": "66beae4ce5598b1dd5ba218d528a26fb2eb1e8e1"
+  },
+  "lvgl": {
+    "version": "8.3",
+    "package_name": "lvgl-v8.3-latest",
+    "url": "https://gitee.com/RT-Thread-Mirror/lvgl.git",
+    "url_fallback": "https://github.com/lvgl/lvgl.git",
+    "commit": "f2c103260f3ac5a1a8c50af348b994ef8153796d",
+    "branch_hint": "release/v8.3"
+  },
+  "toolchain": {
+    "arm_gcc": "Arm GNU Toolchain arm-none-eabi (建议 13+，本机验证 15.2)",
+    "cmake": ">= 3.10",
+    "ninja": "1.12.1",
+    "python": "3.x",
+    "scons": "pip install scons"
+  },
+  "notes": [
+    "本仓库为 BSP 增量；restore 脚本会检出固定 commit 后覆盖本仓库文件。",
+    "字库 HZK12/HZK16 位于 assets/，恢复到工程根目录。",
+    "可选顶层 pico-sdk 不参与本工程编译；boot2 使用 packages 内 RP2350 SDK。"
+  ]
+}

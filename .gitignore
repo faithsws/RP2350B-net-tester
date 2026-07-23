@@ -16,6 +16,7 @@
 .idea/
 *.user
 
-# 字库大文件与 SDK（本仓库不含，用宿主 RT-Thread / Pico SDK）
+# 字库大文件与 SDK（本仓库不含完整 SDK 源码树；恢复脚本按 deps.json 检出）
+# HZK 字库已纳入 assets/ 以便恢复工程
 **/packages/
 **/pico-sdk/
