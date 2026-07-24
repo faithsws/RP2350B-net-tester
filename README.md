@@ -46,6 +46,7 @@ scripts\restore_workspace.bat D:\work\RP2350B-RT-Thread
 | 寻线 | 开始后输出 `LINK_PWM` 460kHz（GPIO19），停止/退出关闭 |
 | 对线 | 共用 H 桥扫描；`pair_judge` 判定断路/联通/短路；单接头 UI |
 | 测序 | 共用扫描电压立方体；`seq_judge` 按标识电阻映射本端→对端线序 |
+| 压接 | TX/RX 4051 + SC_PWM 460kHz 扫描；FinSH press_scan 打印各点与 RX 均值 |
 | 网络调试 | IP/DHCP、Ping、TCP/UDP、DNS、HTTP、ARP、链路闪灯 |
 | 电源/电池 | 升压使能、电池 ADC、充电检测、顶栏电池图标 |
 | 以太网 | CH390 SPI 网卡 + lwIP |
@@ -76,7 +77,7 @@ rt-thread/
 | `hc238` | CTRL_H / CTRL_L 74HC238 + `pair_scan` 扫描 |
 | `hc238/pair_judge` | 对线判定（断路/联通/短路） |
 | `hc238/seq_judge` | 测序判定（`R=7.4/Vmux-2`，标识电阻 ±0.2kΩ） |
-| `mux4051` | TX/RX TMUX4051、LINK4051、对线 ADC(GPIO41) |
+| `mux4051` | TX/RX TMUX4051、LINK4051、对线 ADC(GPIO41)、RX ADC(GPIO45)、`press_scan` |
 | `battery` / `charger` | 电池电压、适配器/充电状态 |
 | `ec11` | 旋转编码器 |
 | `lcd` | ST7789 显示 |
@@ -92,6 +93,7 @@ rt-thread/
 | `net_tester_trace.*` | 寻线 → `link_pwm_start/stop(460kHz)` |
 | `net_tester_pair.*` | 对线 → `pair_scan` + `pair_judge` |
 | `net_tester_crimp.*` | 测序 → `pair_scan` + `seq_judge` |
+| `net_tester_press.*` | 压接 UI（柱状图；硬件扫描待接 press_scan） |
 | `net_tester_netdbg.*` / `netops.*` | 网络协议调试页 |
 | `lv_port_indev` / `lv_port_disp` | 按键/编码器、显示端口 |
 

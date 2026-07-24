@@ -11,6 +11,7 @@ LV_FONT_DECLARE(lv_font_montserrat_20)
 #include "net_tester_trace.h"
 #include "net_tester_pair.h"
 #include "net_tester_crimp.h"
+#include "net_tester_press.h"
 #include "net_tester_netdbg.h"
 
 #include <stdio.h>
@@ -26,8 +27,9 @@ LV_FONT_DECLARE(lv_font_montserrat_20)
 #define UI_FOOTER      0x4A5A6A
 
 #define CLR_TRACE      0x00B4CC
-#define CLR_CRIMP      0xCC44AA
+#define CLR_CRIMP      0xCC44AA  /* 测序 */
 #define CLR_PAIR       0xCCAA00
+#define CLR_PRESS      0xE07040  /* 压接 */
 #define CLR_DEBUG      0x44BB44
 
 /* 电池图标：高对比，深色顶栏上更易辨认 */
@@ -42,7 +44,14 @@ LV_FONT_DECLARE(lv_font_montserrat_20)
 #define GRID_PAD_H     6
 #define GRID_PAD_V     4
 #define GRID_GAP       4
-#define MENU_COUNT     4
+#define MENU_COUNT     5
+#define MENU_COLS      2
+#define MENU_ROWS      3
+/* 文字区高度固定，保证 5 宫格时图标/文字比例与原先接近 */
+#define MENU_TEXT_H    28
+
+#define PRESS_OK_COLOR   0x44BB44
+#define PRESS_BAD_COLOR  0x4A5A6A
 
 /* 电池图标尺寸（≤64x32） */
 #define BAT_ICON_W     40
@@ -59,8 +68,9 @@ LV_FONT_DECLARE(lv_font_montserrat_20)
 
 typedef enum {
     NET_FUNC_TRACE = 0,
-    NET_FUNC_CRIMP,
+    NET_FUNC_CRIMP,   /* 测序 */
     NET_FUNC_PAIR,
+    NET_FUNC_PRESS,   /* 压接 */
     NET_FUNC_DEBUG
 } net_func_id_t;
 
@@ -110,14 +120,19 @@ static lv_obj_t * crimp_start_lbl;
 static seq_scan_result_t seq_result;
 static bool crimp_has_result;
 
+/* 压接界面 */
+static lv_obj_t * press_diagram;
+static lv_obj_t * press_key_catcher;
+static lv_obj_t * press_start_btn;
+static lv_obj_t * press_start_lbl;
+static uint8_t press_status;
+static bool press_has_result;
+
 /* T568B 线序配色：1白橙 2橙 3白绿 4蓝 5白蓝 6绿 7白棕 8棕 */
 static const uint32_t PAIR_WIRE_COLOR[8] = {
     0xE8D0A0, 0xE09020, 0xA0E8A0, 0x4080E0,
     0xA0C8F0, 0x30A030, 0xE8C898, 0xA06020
 };
-
-#define CRIMP_OK_COLOR   0x44BB44
-#define CRIMP_BAD_COLOR  0x4A5A6A
 
 /* 顶栏右上角供电状态图标（浮层，跨页面常驻） */
 static lv_obj_t * bat_cont;
@@ -136,6 +151,7 @@ static lv_obj_t * create_sub_screen(net_func_id_t id, const char * title, uint32
 static lv_obj_t * create_trace_screen(void);
 static lv_obj_t * create_pair_screen(void);
 static lv_obj_t * create_crimp_screen(void);
+static lv_obj_t * create_press_screen(void);
 static lv_obj_t * create_debug_screen(void);
 static void bind_sub_group(lv_obj_t * scr);
 static void bat_icon_create(void);
@@ -144,6 +160,7 @@ static void bat_icon_timer_cb(lv_timer_t * t);
 static void trace_ui_reset_state(void);
 static void pair_ui_reset_state(void);
 static void crimp_ui_reset_state(void);
+static void press_ui_reset_state(void);
 
 static void style_screen_bg(lv_obj_t * scr)
 {
@@ -229,6 +246,10 @@ static void sub_esc_key_cb(lv_event_t * e)
 
     if(lv_scr_act() == sub_screens[NET_FUNC_CRIMP]) {
         crimp_ui_reset_state();
+    }
+
+    if(lv_scr_act() == sub_screens[NET_FUNC_PRESS]) {
+        press_ui_reset_state();
     }
 
     back_to_main();
@@ -1005,6 +1026,256 @@ static lv_obj_t * create_crimp_screen(void)
     return scr;
 }
 
+/* ---------- 压接界面 ---------- */
+
+static void press_ui_reset_state(void)
+{
+    net_tester_press_stop();
+    press_status = 0;
+    press_has_result = false;
+    if(press_start_lbl) {
+        lv_label_set_text(press_start_lbl, "开始");
+    }
+    if(press_diagram) {
+        lv_obj_invalidate(press_diagram);
+    }
+}
+
+static void press_ui_set_waiting(void)
+{
+    press_status = 0;
+    press_has_result = false;
+    if(press_start_lbl) {
+        lv_label_set_text(press_start_lbl, "压接中");
+    }
+    if(press_diagram) {
+        lv_obj_invalidate(press_diagram);
+    }
+}
+
+static void press_ui_set_result(uint8_t status)
+{
+    press_status = status;
+    press_has_result = true;
+    if(press_start_lbl) {
+        lv_label_set_text(press_start_lbl, "开始");
+    }
+    if(press_diagram) {
+        lv_obj_invalidate(press_diagram);
+    }
+}
+
+static void press_result_cb(uint8_t status, void * user_data)
+{
+    LV_UNUSED(user_data);
+    press_ui_set_result(status);
+}
+
+static void press_toggle_start(void)
+{
+    net_tester_press_start();
+    press_ui_set_waiting();
+}
+
+static void press_apply_focus_style(bool focused)
+{
+    if(!press_start_btn) return;
+    if(focused) {
+        lv_obj_set_style_border_color(press_start_btn, lv_color_hex(UI_TITLE), 0);
+        lv_obj_set_style_border_width(press_start_btn, 2, 0);
+    }
+    else {
+        lv_obj_set_style_border_color(press_start_btn, lv_color_hex(UI_BORDER), 0);
+        lv_obj_set_style_border_width(press_start_btn, 1, 0);
+    }
+}
+
+static void press_btn_focus_cb(lv_event_t * e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if(code == LV_EVENT_FOCUSED) {
+        press_apply_focus_style(true);
+    }
+    else if(code == LV_EVENT_DEFOCUSED) {
+        press_apply_focus_style(false);
+    }
+}
+
+static void press_handle_space(void)
+{
+    if(!net_tester_press_is_waiting()) {
+        rt_kprintf("[PRESS] 空格无效: 请先点击开始\n");
+        return;
+    }
+    net_tester_press_simulate_async_done();
+}
+
+static void press_diagram_draw_cb(lv_event_t * e)
+{
+    if(lv_event_get_code(e) != LV_EVENT_DRAW_MAIN) return;
+
+    lv_obj_t * obj = lv_event_get_target(e);
+    lv_draw_ctx_t * draw_ctx = lv_event_get_draw_ctx(e);
+    lv_area_t coords;
+    lv_obj_get_coords(obj, &coords);
+
+    const lv_coord_t w = lv_area_get_width(&coords);
+    const lv_coord_t h = lv_area_get_height(&coords);
+    const lv_coord_t bar_w = 16;
+    const lv_coord_t gap = 8;
+    const lv_coord_t total_w = 8 * bar_w + 7 * gap;
+    const lv_coord_t start_x = coords.x1 + (w - total_w) / 2;
+    const lv_coord_t top_reserve = 40;
+    const lv_coord_t bottom_reserve = 26;
+    const lv_coord_t bar_top = coords.y1 + top_reserve;
+    const lv_coord_t bar_h = h - top_reserve - bottom_reserve;
+    const lv_coord_t bar_bottom = bar_top + (bar_h > 40 ? bar_h : 40) - 1;
+
+    lv_draw_label_dsc_t title_dsc;
+    lv_draw_label_dsc_init(&title_dsc);
+    title_dsc.font = hzk12_font_get();
+    title_dsc.color = lv_color_hex(CLR_PRESS);
+    title_dsc.align = LV_TEXT_ALIGN_CENTER;
+    lv_area_t title_area = {coords.x1 + 10, coords.y1 + 4, coords.x2 - 10, coords.y1 + 18};
+    lv_draw_label(draw_ctx, &title_dsc, &title_area, "水晶头压接", NULL);
+
+    lv_draw_rect_dsc_t bar_dsc;
+    lv_draw_rect_dsc_init(&bar_dsc);
+    bar_dsc.radius = 2;
+    bar_dsc.bg_opa = LV_OPA_COVER;
+    bar_dsc.border_width = 1;
+    bar_dsc.border_color = lv_color_hex(0x203040);
+    bar_dsc.border_opa = LV_OPA_COVER;
+
+    lv_draw_label_dsc_t num_dsc;
+    lv_draw_label_dsc_init(&num_dsc);
+    num_dsc.font = &lv_font_montserrat_14;
+    num_dsc.color = lv_color_hex(UI_FOOTER);
+    num_dsc.align = LV_TEXT_ALIGN_CENTER;
+
+    for(int i = 0; i < 8; i++) {
+        lv_coord_t x1 = start_x + i * (bar_w + gap);
+        lv_coord_t x2 = x1 + bar_w - 1;
+        bool ok = press_has_result && (press_status & (1u << i));
+        bar_dsc.bg_color = lv_color_hex(ok ? PRESS_OK_COLOR : PRESS_BAD_COLOR);
+        lv_area_t bar = {x1, bar_top, x2, bar_bottom};
+        lv_draw_rect(draw_ctx, &bar_dsc, &bar);
+
+        char num[2] = {(char)('1' + i), '\0'};
+        lv_area_t n_area = {x1 - 2, bar_bottom + 4, x2 + 2, coords.y2 - 2};
+        lv_draw_label(draw_ctx, &num_dsc, &n_area, num, NULL);
+    }
+}
+
+static void press_key_cb(lv_event_t * e)
+{
+    if(lv_event_get_code(e) != LV_EVENT_KEY) return;
+
+    uint32_t key = lv_event_get_key(e);
+    if(key == LV_KEY_ESC) {
+        press_ui_reset_state();
+        back_to_main();
+        lv_event_stop_processing(e);
+    }
+    else if(key == ' ' || key == LV_KEY_NEXT) {
+        press_handle_space();
+        lv_event_stop_processing(e);
+    }
+    else if(key == LV_KEY_ENTER) {
+        press_toggle_start();
+        lv_event_stop_processing(e);
+    }
+}
+
+static void press_start_btn_event_cb(lv_event_t * e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if(code == LV_EVENT_FOCUSED || code == LV_EVENT_DEFOCUSED) {
+        press_btn_focus_cb(e);
+        return;
+    }
+
+    if(code == LV_EVENT_CLICKED) {
+        press_toggle_start();
+        return;
+    }
+
+    if(code == LV_EVENT_KEY) {
+        uint32_t key = lv_event_get_key(e);
+        if(key == LV_KEY_ENTER) {
+            press_toggle_start();
+            lv_event_stop_processing(e);
+        }
+        else if(key == ' ' || key == LV_KEY_NEXT) {
+            press_handle_space();
+            lv_event_stop_processing(e);
+        }
+        else if(key == LV_KEY_ESC) {
+            press_ui_reset_state();
+            back_to_main();
+            lv_event_stop_processing(e);
+        }
+    }
+}
+
+static lv_obj_t * create_press_screen(void)
+{
+    const lv_font_t * font = UI_CN_FONT;
+    lv_obj_t * scr = lv_obj_create(NULL);
+    style_screen_bg(scr);
+
+    create_header(scr, "压接");
+
+    lv_obj_t * body = lv_obj_create(scr);
+    lv_obj_remove_style_all(body);
+    lv_obj_set_size(body, SCR_W, SCR_H - HDR_H - FTR_H);
+    lv_obj_align(body, LV_ALIGN_TOP_MID, 0, HDR_H);
+    lv_obj_clear_flag(body, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+
+    const int32_t btn_h = 36;
+    const int32_t btn_gap = 6;
+    press_diagram = lv_obj_create(body);
+    lv_obj_remove_style_all(press_diagram);
+    lv_obj_set_size(press_diagram, SCR_W - 8, SCR_H - HDR_H - FTR_H - btn_h - btn_gap - 8);
+    lv_obj_align(press_diagram, LV_ALIGN_TOP_MID, 0, 2);
+    lv_obj_set_style_bg_color(press_diagram, lv_color_hex(UI_PANEL), 0);
+    lv_obj_set_style_bg_opa(press_diagram, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(press_diagram, 3, 0);
+    lv_obj_set_style_border_color(press_diagram, lv_color_hex(UI_BORDER), 0);
+    lv_obj_set_style_border_width(press_diagram, 1, 0);
+    lv_obj_clear_flag(press_diagram, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(press_diagram, press_diagram_draw_cb, LV_EVENT_DRAW_MAIN, NULL);
+
+    press_start_btn = lv_btn_create(body);
+    lv_obj_remove_style_all(press_start_btn);
+    lv_obj_set_size(press_start_btn, 80, btn_h);
+    lv_obj_align(press_start_btn, LV_ALIGN_BOTTOM_MID, 0, -2);
+    lv_obj_set_style_bg_color(press_start_btn, lv_color_hex(UI_PANEL), 0);
+    lv_obj_set_style_bg_opa(press_start_btn, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_color(press_start_btn, lv_color_hex(UI_BORDER), 0);
+    lv_obj_set_style_border_width(press_start_btn, 1, 0);
+    lv_obj_set_style_radius(press_start_btn, 3, 0);
+    lv_obj_add_event_cb(press_start_btn, press_start_btn_event_cb, LV_EVENT_ALL, NULL);
+
+    press_start_lbl = lv_label_create(press_start_btn);
+    lv_label_set_text(press_start_lbl, "开始");
+    lv_obj_set_style_text_font(press_start_lbl, font, 0);
+    lv_obj_set_style_text_color(press_start_lbl, lv_color_hex(CLR_PRESS), 0);
+    lv_obj_center(press_start_lbl);
+
+    press_key_catcher = lv_obj_create(scr);
+    lv_obj_remove_style_all(press_key_catcher);
+    lv_obj_set_size(press_key_catcher, SCR_W, SCR_H);
+    lv_obj_add_flag(press_key_catcher, LV_OBJ_FLAG_CLICK_FOCUSABLE);
+    lv_obj_clear_flag(press_key_catcher, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(press_key_catcher, press_key_cb, LV_EVENT_KEY, NULL);
+
+    lv_obj_set_user_data(scr, press_key_catcher);
+    press_apply_focus_style(false);
+    press_ui_reset_state();
+    return scr;
+}
+
 static lv_obj_t * create_header_ex(lv_obj_t * parent, const char * text, const lv_font_t * font)
 {
     lv_obj_t * hdr = lv_obj_create(parent);
@@ -1291,6 +1562,18 @@ static void bind_sub_group(lv_obj_t * scr)
             lv_group_focus_obj(crimp_start_btn);
         }
     }
+    else if(scr == sub_screens[NET_FUNC_PRESS]) {
+        press_ui_reset_state();
+        press_apply_focus_style(false);
+        if(press_key_catcher) {
+            lv_group_add_obj(sub_group, press_key_catcher);
+            lv_group_focus_obj(press_key_catcher);
+        }
+        if(press_start_btn) {
+            lv_group_add_obj(sub_group, press_start_btn);
+            lv_group_focus_obj(press_start_btn);
+        }
+    }
     else {
         lv_obj_t * catcher = (lv_obj_t *)lv_obj_get_user_data(scr);
         if(catcher) {
@@ -1326,6 +1609,7 @@ static void back_to_main(void)
     trace_ui_reset_state();
     pair_ui_reset_state();
     crimp_ui_reset_state();
+    press_ui_reset_state();
 
     net_tester_netdbg_on_leave();
 
@@ -1344,21 +1628,36 @@ static lv_obj_t * create_menu_tile(lv_obj_t * parent, net_func_id_t id, int col,
 {
     const lv_font_t * font = UI_CN_FONT;
 
-    static const char * names[MENU_COUNT] = {"寻线", "测序", "对线", "调试"};
-    static const char * icons[MENU_COUNT] = {
-        LV_SYMBOL_GPS,       /* 寻线 ≈ fa-route */
-        LV_SYMBOL_USB,       /* 测序 */
-        LV_SYMBOL_LOOP,      /* 对线 ≈ fa-link */
-        LV_SYMBOL_LIST,      /* 调试 ≈ fa-terminal */
+    static const char * names[MENU_COUNT] = {
+        "寻线", "测序", "对线", "压接", "调试"
     };
-    static const uint32_t colors[MENU_COUNT] = {CLR_TRACE, CLR_CRIMP, CLR_PAIR, CLR_DEBUG};
+    static const char * icons[MENU_COUNT] = {
+        LV_SYMBOL_GPS,       /* 寻线 */
+        LV_SYMBOL_USB,       /* 测序 */
+        LV_SYMBOL_LOOP,      /* 对线 */
+        LV_SYMBOL_CHARGE,    /* 压接 */
+        LV_SYMBOL_LIST,      /* 调试 */
+    };
+    static const uint32_t colors[MENU_COUNT] = {
+        CLR_TRACE, CLR_CRIMP, CLR_PAIR, CLR_PRESS, CLR_DEBUG
+    };
 
     int32_t grid_w = SCR_W - GRID_PAD_H * 2;
     int32_t grid_h = SCR_H - HDR_H - FTR_H - GRID_PAD_V * 2;
-    int32_t tile_w = (grid_w - GRID_GAP) / 2;
-    int32_t tile_h = (grid_h - GRID_GAP) / 2;
-    int32_t text_h = 32; /* 容纳 24 点阵菜单名 */
+    int32_t tile_w = (grid_w - GRID_GAP) / MENU_COLS;
+    int32_t tile_h = (grid_h - GRID_GAP * (MENU_ROWS - 1)) / MENU_ROWS;
+    int32_t text_h = MENU_TEXT_H;
     int32_t icon_h = tile_h - text_h;
+    int32_t x;
+    int32_t y = row * (tile_h + GRID_GAP);
+
+    /* 末行单独一项时水平居中，保持与其它按钮同尺寸 */
+    if(row == MENU_ROWS - 1 && col < 0) {
+        x = (grid_w - tile_w) / 2;
+    }
+    else {
+        x = col * (tile_w + GRID_GAP);
+    }
 
     menu_items[id].name = names[id];
     menu_items[id].icon_sym = icons[id];
@@ -1367,12 +1666,12 @@ static lv_obj_t * create_menu_tile(lv_obj_t * parent, net_func_id_t id, int col,
     lv_obj_t * tile = lv_btn_create(parent);
     lv_obj_remove_style_all(tile);
     lv_obj_set_size(tile, tile_w, tile_h);
-    lv_obj_set_pos(tile, col * (tile_w + GRID_GAP), row * (tile_h + GRID_GAP));
+    lv_obj_set_pos(tile, x, y);
     lv_obj_set_style_pad_all(tile, 0, 0);
     lv_obj_set_style_pad_row(tile, 0, 0);
     lv_obj_clear_flag(tile, LV_OBJ_FLAG_SCROLLABLE);
 
-    /* 图标区 62% */
+    /* 图标区：随 tile_h 缩放，文字区高度固定以保住比例观感 */
     lv_obj_t * ico_box = lv_obj_create(tile);
     lv_obj_remove_style_all(ico_box);
     lv_obj_set_size(ico_box, tile_w, icon_h);
@@ -1385,7 +1684,6 @@ static lv_obj_t * create_menu_tile(lv_obj_t * parent, net_func_id_t id, int col,
     lv_obj_set_style_text_color(icon_lbl, lv_color_hex(colors[id]), 0);
     lv_obj_align(icon_lbl, LV_ALIGN_CENTER, 0, 0);
 
-    /* 文字区 38% */
     lv_obj_t * txt_box = lv_obj_create(tile);
     lv_obj_remove_style_all(txt_box);
     lv_obj_set_size(txt_box, tile_w, text_h);
@@ -1440,9 +1738,10 @@ static void create_main_screen(void)
     lv_obj_clear_flag(grid, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
 
     create_menu_tile(grid, NET_FUNC_TRACE, 0, 0);
-    create_menu_tile(grid, NET_FUNC_CRIMP, 1, 0);
+    create_menu_tile(grid, NET_FUNC_CRIMP, 1, 0);  /* 测序 */
     create_menu_tile(grid, NET_FUNC_PAIR, 0, 1);
-    create_menu_tile(grid, NET_FUNC_DEBUG, 1, 1);
+    create_menu_tile(grid, NET_FUNC_PRESS, 1, 1);  /* 压接 */
+    create_menu_tile(grid, NET_FUNC_DEBUG, -1, 2); /* 末行居中 */
 
     lv_group_focus_obj(menu_items[0].tile);
     refresh_all_tiles();
@@ -1462,10 +1761,12 @@ void net_tester_ui_init(lv_indev_t * keypad, lv_indev_t * encoder)
     sub_screens[NET_FUNC_TRACE] = create_trace_screen();
     sub_screens[NET_FUNC_CRIMP] = create_crimp_screen();
     sub_screens[NET_FUNC_PAIR]  = create_pair_screen();
+    sub_screens[NET_FUNC_PRESS] = create_press_screen();
     sub_screens[NET_FUNC_DEBUG] = create_debug_screen();
 
     net_tester_pair_set_result_cb(pair_result_cb, NULL);
     net_tester_crimp_set_result_cb(crimp_result_cb, NULL);
+    net_tester_press_set_result_cb(press_result_cb, NULL);
 
     net_tester_netdbg_set_leave_cb(back_to_main);
 

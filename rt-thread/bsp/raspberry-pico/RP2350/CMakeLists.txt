@@ -301,6 +301,8 @@ SET(RT_DRIVERS_SOURCES
 	board/ports/mux4051/link_adc.c
 	board/ports/mux4051/link_mux4051.c
 	board/ports/mux4051/mux4051_port.c
+	board/ports/mux4051/press_scan.c
+	board/ports/mux4051/rx_adc.c
 	board/ports/mux4051/rx_mux4051.c
 	board/ports/mux4051/tmux4051.c
 	board/ports/mux4051/tx_mux4051.c
@@ -553,6 +555,7 @@ SET(RT_LVGL-DEMO_SOURCES
 SET(RT_LVGL-NET-TESTER_SOURCES
 	applications/lvgl/net_tester/net_tester_ascii_input.c
 	applications/lvgl/net_tester/net_tester_crimp.c
+	applications/lvgl/net_tester/net_tester_press.c
 	applications/lvgl/net_tester/net_tester_ip_input.c
 	applications/lvgl/net_tester/net_tester_netdbg.c
 	applications/lvgl/net_tester/net_tester_netops.c
