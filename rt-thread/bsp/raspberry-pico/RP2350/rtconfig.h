@@ -304,6 +304,7 @@
 #define PKG_LVGL_DISP_REFR_PERIOD 33
 #define LV_FONT_MONTSERRAT_14 1
 #define LV_FONT_MONTSERRAT_20 1
+#define LV_USE_QRCODE 1
 
 /* end of LVGL: powerful and easy-to-use embedded GUI library */
 

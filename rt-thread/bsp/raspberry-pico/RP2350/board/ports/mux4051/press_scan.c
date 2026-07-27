@@ -100,6 +100,100 @@ void press_scan_rx_avg(const rt_uint32_t mv[PRESS_SCAN_CH_NUM][PRESS_SCAN_CH_NUM
     }
 }
 
+void press_scan_tx_avg(const rt_uint32_t mv[PRESS_SCAN_CH_NUM][PRESS_SCAN_CH_NUM],
+                       rt_uint32_t avg_mv[PRESS_SCAN_CH_NUM])
+{
+    rt_uint8_t tx;
+    rt_uint8_t rx;
+    rt_uint32_t sum;
+
+    if (mv == RT_NULL || avg_mv == RT_NULL)
+    {
+        return;
+    }
+
+    for (tx = 0; tx < PRESS_SCAN_CH_NUM; tx++)
+    {
+        sum = 0;
+        for (rx = 0; rx < PRESS_SCAN_CH_NUM; rx++)
+        {
+            if (rx == tx)
+            {
+                continue;
+            }
+            sum += mv[tx][rx];
+        }
+        avg_mv[tx] = sum / PRESS_SCAN_TX_AVG_N;
+    }
+}
+
+void press_scan_judge(const rt_uint32_t mv[PRESS_SCAN_CH_NUM][PRESS_SCAN_CH_NUM],
+                      press_judge_result_t *out)
+{
+    rt_uint8_t ch;
+
+    if (mv == RT_NULL || out == RT_NULL)
+    {
+        return;
+    }
+
+    rt_memset(out, 0, sizeof(*out));
+    press_scan_tx_avg(mv, out->tx_avg_mv);
+    press_scan_rx_avg(mv, out->rx_avg_mv);
+
+    for (ch = 0; ch < PRESS_SCAN_CH_NUM; ch++)
+    {
+        /* TX/RX 均值都低于阈值 → 不牢；否则牢固 */
+        if (out->tx_avg_mv[ch] < PRESS_JUDGE_THR_MV &&
+            out->rx_avg_mv[ch] < PRESS_JUDGE_THR_MV)
+        {
+            /* bit 保持 0：不牢固 */
+            continue;
+        }
+        out->status |= (rt_uint8_t)(1u << ch);
+    }
+}
+
+rt_err_t press_scan_run_judge(press_judge_result_t *out)
+{
+    rt_uint32_t mv[PRESS_SCAN_CH_NUM][PRESS_SCAN_CH_NUM];
+    int n;
+
+    if (out == RT_NULL)
+    {
+        return -RT_EINVAL;
+    }
+
+    n = press_scan_run(mv);
+    if (n < 0)
+    {
+        return -RT_ERROR;
+    }
+
+    press_scan_judge(mv, out);
+    return RT_EOK;
+}
+
+void press_scan_judge_log(const press_judge_result_t *r)
+{
+    rt_uint8_t ch;
+
+    if (r == RT_NULL)
+    {
+        return;
+    }
+
+    rt_kprintf("\nPress judge thr=%umV, status=0x%02X\n",
+               PRESS_JUDGE_THR_MV, r->status);
+    for (ch = 0; ch < PRESS_SCAN_CH_NUM; ch++)
+    {
+        rt_bool_t ok = (r->status & (1u << ch)) ? RT_TRUE : RT_FALSE;
+        rt_kprintf("CH%u TX_avg=%u RX_avg=%u -> %s\n",
+                   ch, r->tx_avg_mv[ch], r->rx_avg_mv[ch],
+                   ok ? "牢固" : "不牢");
+    }
+}
+
 #ifdef RT_USING_FINSH
 #include <finsh.h>
 
@@ -138,7 +232,7 @@ static void press_scan_print_matrix(const rt_uint32_t mv[PRESS_SCAN_CH_NUM][PRES
 static int cmd_press_scan(int argc, char **argv)
 {
     rt_uint32_t mv[PRESS_SCAN_CH_NUM][PRESS_SCAN_CH_NUM];
-    rt_uint32_t avg_mv[PRESS_SCAN_CH_NUM];
+    press_judge_result_t judge;
     rt_uint8_t tx;
     rt_uint8_t rx;
     int n;
@@ -154,7 +248,6 @@ static int cmd_press_scan(int argc, char **argv)
         return n;
     }
 
-    /* 逐点打印，便于串口实时查看 */
     for (tx = 0; tx < PRESS_SCAN_CH_NUM; tx++)
     {
         for (rx = 0; rx < PRESS_SCAN_CH_NUM; rx++)
@@ -168,15 +261,21 @@ static int cmd_press_scan(int argc, char **argv)
     }
 
     press_scan_print_matrix(mv);
+    press_scan_judge(mv, &judge);
 
-    /* 每个 RX：对其余 7 个 TX 采样取均值 */
-    press_scan_rx_avg(mv, avg_mv);
+    rt_kprintf("\nTX avg over %d RX samples (mV):\n", PRESS_SCAN_TX_AVG_N);
+    for (tx = 0; tx < PRESS_SCAN_CH_NUM; tx++)
+    {
+        rt_kprintf("TX%u avg: %u mV\n", tx, judge.tx_avg_mv[tx]);
+    }
+
     rt_kprintf("\nRX avg over %d TX samples (mV):\n", PRESS_SCAN_RX_AVG_N);
     for (rx = 0; rx < PRESS_SCAN_CH_NUM; rx++)
     {
-        rt_kprintf("RX%u avg: %u mV\n", rx, avg_mv[rx]);
+        rt_kprintf("RX%u avg: %u mV\n", rx, judge.rx_avg_mv[rx]);
     }
 
+    press_scan_judge_log(&judge);
     rt_kprintf("done, samples=%d\n", n);
     return 0;
 }

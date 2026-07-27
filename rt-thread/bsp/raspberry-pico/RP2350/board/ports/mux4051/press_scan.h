@@ -14,8 +14,19 @@ extern "C" {
 
 #define PRESS_SCAN_CH_NUM     8
 #define PRESS_SCAN_SETTLE_MS  50
-/* 每个 RX 对应 7 个异通道 TX 采样点，再取均值 */
+/* 每个 RX/TX 对应 7 个异通道采样点，再取均值 */
 #define PRESS_SCAN_RX_AVG_N   (PRESS_SCAN_CH_NUM - 1)
+#define PRESS_SCAN_TX_AVG_N   (PRESS_SCAN_CH_NUM - 1)
+/* TX/RX 均值均低于该阈值 → 该通道压接不牢 */
+#define PRESS_JUDGE_THR_MV    30
+
+typedef struct
+{
+    rt_uint32_t tx_avg_mv[PRESS_SCAN_CH_NUM];
+    rt_uint32_t rx_avg_mv[PRESS_SCAN_CH_NUM];
+    /* bit(i)=1：通道 i 压接牢固；bit(i)=0：不牢固 */
+    rt_uint8_t status;
+} press_judge_result_t;
 
 /**
  * 执行一次压接电压扫描。
@@ -30,6 +41,24 @@ int press_scan_run(rt_uint32_t mv[PRESS_SCAN_CH_NUM][PRESS_SCAN_CH_NUM]);
  */
 void press_scan_rx_avg(const rt_uint32_t mv[PRESS_SCAN_CH_NUM][PRESS_SCAN_CH_NUM],
                        rt_uint32_t avg_mv[PRESS_SCAN_CH_NUM]);
+
+/**
+ * 按 TX 通道汇总：每个 TX 对其余 7 个 RX 采样取均值。
+ * avg_mv[tx]：该 TX 的均值 mV。
+ */
+void press_scan_tx_avg(const rt_uint32_t mv[PRESS_SCAN_CH_NUM][PRESS_SCAN_CH_NUM],
+                       rt_uint32_t avg_mv[PRESS_SCAN_CH_NUM]);
+
+/**
+ * 压接牢固判定：TX_avg[i]<30mV 且 RX_avg[i]<30mV → 通道 i 不牢（bit=0）。
+ */
+void press_scan_judge(const rt_uint32_t mv[PRESS_SCAN_CH_NUM][PRESS_SCAN_CH_NUM],
+                      press_judge_result_t *out);
+
+/** 扫描 + 均值 + 判定；成功返回 RT_EOK */
+rt_err_t press_scan_run_judge(press_judge_result_t *out);
+
+void press_scan_judge_log(const press_judge_result_t *r);
 
 #ifdef __cplusplus
 }

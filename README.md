@@ -46,7 +46,8 @@ scripts\restore_workspace.bat D:\work\RP2350B-RT-Thread
 | 寻线 | 开始后输出 `LINK_PWM` 460kHz（GPIO19），停止/退出关闭 |
 | 对线 | 共用 H 桥扫描；`pair_judge` 判定断路/联通/短路；单接头 UI |
 | 测序 | 共用扫描电压立方体；`seq_judge` 按标识电阻映射本端→对端线序 |
-| 压接 | TX/RX 4051 + SC_PWM 460kHz 扫描；FinSH press_scan 打印各点与 RX 均值 |
+| 关于 | 二维码（B站链接）+ SW/HW/UID 明文；Faithsws出品 |
+| 压接 | TX/RX 4051 + SC_PWM 460kHz 扫描；TX/RX 4051 扫描；TX&RX 均值均 <30mV 判定不牢；UI 绿/灰触点 |
 | 网络调试 | IP/DHCP、Ping、TCP/UDP、DNS、HTTP、ARP、链路闪灯 |
 | 电源/电池 | 升压使能、电池 ADC、充电检测、顶栏电池图标 |
 | 以太网 | CH390 SPI 网卡 + lwIP |

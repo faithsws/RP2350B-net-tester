@@ -143,6 +143,8 @@ INCLUDE_DIRECTORIES(
 	packages/raspberrypi-pico-rp2350-sdk-latest/src/rp2_common/hardware_dma/include
 	packages/raspberrypi-pico-rp2350-sdk-latest/src/rp2_common/hardware_adc/include
 	packages/raspberrypi-pico-rp2350-sdk-latest/src/rp2_common/hardware_pwm/include
+	packages/raspberrypi-pico-rp2350-sdk-latest/src/rp2_common/hardware_flash/include
+	packages/raspberrypi-pico-rp2350-sdk-latest/src/rp2_common/pico_unique_id/include
 	packages/raspberrypi-pico-rp2350-sdk-latest/src/common/pico_stdlib_headers/include
 	packages/raspberrypi-pico-rp2350-sdk-latest/src/common/pico_divider_headers/include
 	packages/raspberrypi-pico-rp2350-sdk-latest/src/common/pico_binary_info/include
@@ -554,6 +556,7 @@ SET(RT_LVGL-DEMO_SOURCES
 
 SET(RT_LVGL-NET-TESTER_SOURCES
 	applications/lvgl/net_tester/net_tester_ascii_input.c
+	applications/lvgl/net_tester/net_tester_about.c
 	applications/lvgl/net_tester/net_tester_crimp.c
 	applications/lvgl/net_tester/net_tester_press.c
 	applications/lvgl/net_tester/net_tester_ip_input.c
@@ -646,6 +649,7 @@ SET(RT_RASPBERRYPI-PICO-RP2350-SDK_SOURCES
 	packages/raspberrypi-pico-rp2350-sdk-latest/src/rp2_common/pico_bootrom/bootrom_lock.c
 	packages/raspberrypi-pico-rp2350-sdk-latest/src/rp2_common/hardware_boot_lock/boot_lock.c
 	packages/raspberrypi-pico-rp2350-sdk-latest/src/rp2_common/pico_flash/flash.c
+	packages/raspberrypi-pico-rp2350-sdk-latest/src/rp2_common/pico_unique_id/unique_id.c
 	packages/raspberrypi-pico-rp2350-sdk-latest/src/rp2_common/hardware_xosc/xosc.c
 	packages/raspberrypi-pico-rp2350-sdk-latest/src/rp2_common/hardware_divider/divider.c
 	packages/raspberrypi-pico-rp2350-sdk-latest/src/rp2_common/pico_runtime/runtime.c

@@ -12,6 +12,7 @@ LV_FONT_DECLARE(lv_font_montserrat_20)
 #include "net_tester_pair.h"
 #include "net_tester_crimp.h"
 #include "net_tester_press.h"
+#include "net_tester_about.h"
 #include "net_tester_netdbg.h"
 
 #include <stdio.h>
@@ -31,6 +32,7 @@ LV_FONT_DECLARE(lv_font_montserrat_20)
 #define CLR_PAIR       0xCCAA00
 #define CLR_PRESS      0xE07040  /* 压接 */
 #define CLR_DEBUG      0x44BB44
+#define CLR_ABOUT      0x8899BB  /* 关于 */
 
 /* 电池图标：高对比，深色顶栏上更易辨认 */
 #define BAT_CLR_OK     0x2EE66A
@@ -44,10 +46,10 @@ LV_FONT_DECLARE(lv_font_montserrat_20)
 #define GRID_PAD_H     6
 #define GRID_PAD_V     4
 #define GRID_GAP       4
-#define MENU_COUNT     5
+#define MENU_COUNT     6
 #define MENU_COLS      2
 #define MENU_ROWS      3
-/* 文字区高度固定，保证 5 宫格时图标/文字比例与原先接近 */
+/* 文字区高度固定，保证图标/文字比例与原先接近 */
 #define MENU_TEXT_H    28
 
 #define PRESS_OK_COLOR   0x44BB44
@@ -71,7 +73,8 @@ typedef enum {
     NET_FUNC_CRIMP,   /* 测序 */
     NET_FUNC_PAIR,
     NET_FUNC_PRESS,   /* 压接 */
-    NET_FUNC_DEBUG
+    NET_FUNC_DEBUG,
+    NET_FUNC_ABOUT
 } net_func_id_t;
 
 typedef struct {
@@ -153,6 +156,7 @@ static lv_obj_t * create_pair_screen(void);
 static lv_obj_t * create_crimp_screen(void);
 static lv_obj_t * create_press_screen(void);
 static lv_obj_t * create_debug_screen(void);
+static lv_obj_t * create_about_screen(void);
 static void bind_sub_group(lv_obj_t * scr);
 static void bat_icon_create(void);
 static void bat_icon_refresh(void);
@@ -1046,7 +1050,7 @@ static void press_ui_set_waiting(void)
     press_status = 0;
     press_has_result = false;
     if(press_start_lbl) {
-        lv_label_set_text(press_start_lbl, "压接中");
+        lv_label_set_text(press_start_lbl, "测量中");
     }
     if(press_diagram) {
         lv_obj_invalidate(press_diagram);
@@ -1121,31 +1125,27 @@ static void press_diagram_draw_cb(lv_event_t * e)
 
     const lv_coord_t w = lv_area_get_width(&coords);
     const lv_coord_t h = lv_area_get_height(&coords);
-    const lv_coord_t bar_w = 16;
-    const lv_coord_t gap = 8;
-    const lv_coord_t total_w = 8 * bar_w + 7 * gap;
-    const lv_coord_t start_x = coords.x1 + (w - total_w) / 2;
-    const lv_coord_t top_reserve = 40;
-    const lv_coord_t bottom_reserve = 26;
-    const lv_coord_t bar_top = coords.y1 + top_reserve;
-    const lv_coord_t bar_h = h - top_reserve - bottom_reserve;
-    const lv_coord_t bar_bottom = bar_top + (bar_h > 40 ? bar_h : 40) - 1;
+    /* 横向 8 触点：圆点 + 下方标号 1~8 */
+    const lv_coord_t pad = 14;
+    const lv_coord_t gap = (w - pad * 2) / 8;
+    const lv_coord_t r = 10;
+    const lv_coord_t cy = coords.y1 + h / 2 - 6;
 
     lv_draw_label_dsc_t title_dsc;
     lv_draw_label_dsc_init(&title_dsc);
     title_dsc.font = hzk12_font_get();
     title_dsc.color = lv_color_hex(CLR_PRESS);
     title_dsc.align = LV_TEXT_ALIGN_CENTER;
-    lv_area_t title_area = {coords.x1 + 10, coords.y1 + 4, coords.x2 - 10, coords.y1 + 18};
+    lv_area_t title_area = {coords.x1 + 10, coords.y1 + 6, coords.x2 - 10, coords.y1 + 20};
     lv_draw_label(draw_ctx, &title_dsc, &title_area, "水晶头压接", NULL);
 
-    lv_draw_rect_dsc_t bar_dsc;
-    lv_draw_rect_dsc_init(&bar_dsc);
-    bar_dsc.radius = 2;
-    bar_dsc.bg_opa = LV_OPA_COVER;
-    bar_dsc.border_width = 1;
-    bar_dsc.border_color = lv_color_hex(0x203040);
-    bar_dsc.border_opa = LV_OPA_COVER;
+    lv_draw_rect_dsc_t dot_dsc;
+    lv_draw_rect_dsc_init(&dot_dsc);
+    dot_dsc.radius = LV_RADIUS_CIRCLE;
+    dot_dsc.bg_opa = LV_OPA_COVER;
+    dot_dsc.border_width = 1;
+    dot_dsc.border_color = lv_color_hex(0x203040);
+    dot_dsc.border_opa = LV_OPA_COVER;
 
     lv_draw_label_dsc_t num_dsc;
     lv_draw_label_dsc_init(&num_dsc);
@@ -1154,15 +1154,15 @@ static void press_diagram_draw_cb(lv_event_t * e)
     num_dsc.align = LV_TEXT_ALIGN_CENTER;
 
     for(int i = 0; i < 8; i++) {
-        lv_coord_t x1 = start_x + i * (bar_w + gap);
-        lv_coord_t x2 = x1 + bar_w - 1;
+        lv_coord_t cx = coords.x1 + pad + gap / 2 + i * gap;
         bool ok = press_has_result && (press_status & (1u << i));
-        bar_dsc.bg_color = lv_color_hex(ok ? PRESS_OK_COLOR : PRESS_BAD_COLOR);
-        lv_area_t bar = {x1, bar_top, x2, bar_bottom};
-        lv_draw_rect(draw_ctx, &bar_dsc, &bar);
+        /* 无结果时全灰；有结果：牢固绿 / 不牢固灰 */
+        dot_dsc.bg_color = lv_color_hex(ok ? PRESS_OK_COLOR : PRESS_BAD_COLOR);
+        lv_area_t dot = {cx - r, cy - r, cx + r, cy + r};
+        lv_draw_rect(draw_ctx, &dot_dsc, &dot);
 
         char num[2] = {(char)('1' + i), '\0'};
-        lv_area_t n_area = {x1 - 2, bar_bottom + 4, x2 + 2, coords.y2 - 2};
+        lv_area_t n_area = {cx - 8, cy + r + 6, cx + 8, cy + r + 22};
         lv_draw_label(draw_ctx, &num_dsc, &n_area, num, NULL);
     }
 }
@@ -1512,6 +1512,17 @@ static lv_obj_t * create_debug_screen(void)
     return net_tester_netdbg_create_menu();
 }
 
+static lv_obj_t * create_about_screen(void)
+{
+    lv_obj_t * scr = net_tester_about_create_screen();
+    lv_obj_t * catcher = (lv_obj_t *)lv_obj_get_user_data(scr);
+
+    if(catcher) {
+        lv_obj_add_event_cb(catcher, sub_key_cb, LV_EVENT_KEY, NULL);
+    }
+    return scr;
+}
+
 static void bind_sub_group(lv_obj_t * scr)
 {
     if(sub_group) {
@@ -1629,7 +1640,7 @@ static lv_obj_t * create_menu_tile(lv_obj_t * parent, net_func_id_t id, int col,
     const lv_font_t * font = UI_CN_FONT;
 
     static const char * names[MENU_COUNT] = {
-        "寻线", "测序", "对线", "压接", "调试"
+        "寻线", "测序", "对线", "压接", "调试", "关于"
     };
     static const char * icons[MENU_COUNT] = {
         LV_SYMBOL_GPS,       /* 寻线 */
@@ -1637,9 +1648,10 @@ static lv_obj_t * create_menu_tile(lv_obj_t * parent, net_func_id_t id, int col,
         LV_SYMBOL_LOOP,      /* 对线 */
         LV_SYMBOL_CHARGE,    /* 压接 */
         LV_SYMBOL_LIST,      /* 调试 */
+        LV_SYMBOL_HOME,      /* 关于 */
     };
     static const uint32_t colors[MENU_COUNT] = {
-        CLR_TRACE, CLR_CRIMP, CLR_PAIR, CLR_PRESS, CLR_DEBUG
+        CLR_TRACE, CLR_CRIMP, CLR_PAIR, CLR_PRESS, CLR_DEBUG, CLR_ABOUT
     };
 
     int32_t grid_w = SCR_W - GRID_PAD_H * 2;
@@ -1741,7 +1753,8 @@ static void create_main_screen(void)
     create_menu_tile(grid, NET_FUNC_CRIMP, 1, 0);  /* 测序 */
     create_menu_tile(grid, NET_FUNC_PAIR, 0, 1);
     create_menu_tile(grid, NET_FUNC_PRESS, 1, 1);  /* 压接 */
-    create_menu_tile(grid, NET_FUNC_DEBUG, -1, 2); /* 末行居中 */
+    create_menu_tile(grid, NET_FUNC_DEBUG, 0, 2);
+    create_menu_tile(grid, NET_FUNC_ABOUT, 1, 2);  /* 关于 */
 
     lv_group_focus_obj(menu_items[0].tile);
     refresh_all_tiles();
@@ -1763,6 +1776,7 @@ void net_tester_ui_init(lv_indev_t * keypad, lv_indev_t * encoder)
     sub_screens[NET_FUNC_PAIR]  = create_pair_screen();
     sub_screens[NET_FUNC_PRESS] = create_press_screen();
     sub_screens[NET_FUNC_DEBUG] = create_debug_screen();
+    sub_screens[NET_FUNC_ABOUT] = create_about_screen();
 
     net_tester_pair_set_result_cb(pair_result_cb, NULL);
     net_tester_crimp_set_result_cb(crimp_result_cb, NULL);
