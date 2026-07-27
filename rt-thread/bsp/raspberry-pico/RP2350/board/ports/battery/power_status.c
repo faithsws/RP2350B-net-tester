@@ -1,24 +1,30 @@
 /*
  * 供电状态汇总与 FinSH 测试命令
+ * 电池档位阈值来自 net_param（Flash INI）
  */
 #include "power_status.h"
+#include "net_param.h"
 #include "battery_adc.h"
 #include "charger_detect.h"
 #include "charge_status.h"
 
 rt_uint8_t power_status_level_from_mv(rt_uint32_t mv)
 {
-    if (mv >= POWER_BAT_MV_LVL4)
+    const net_param_t *p = net_param_get();
+
+    if (mv >= p->bat_lvl4_mv)
         return 4;
-    if (mv >= POWER_BAT_MV_LVL3)
+    if (mv >= p->bat_lvl3_mv)
         return 3;
-    if (mv >= POWER_BAT_MV_LVL2)
+    if (mv >= p->bat_lvl2_mv)
         return 2;
     return 1;
 }
 
 void power_status_get(power_status_t *st)
 {
+    const net_param_t *p = net_param_get();
+
     if (!st)
         return;
 
@@ -26,7 +32,7 @@ void power_status_get(power_status_t *st)
     st->charging = charge_status_is_charging();
     st->voltage_mv = battery_adc_read_mv();
     st->level = power_status_level_from_mv(st->voltage_mv);
-    st->low = (st->voltage_mv < POWER_BAT_MV_LOW) ? RT_TRUE : RT_FALSE;
+    st->low = (st->voltage_mv < p->bat_low_mv) ? RT_TRUE : RT_FALSE;
 }
 
 void power_status_dump(void)

@@ -10,7 +10,7 @@
 extern "C" {
 #endif
 
-/* 锂电池电压档位阈值（mV），可按电芯特性微调 */
+/* 锂电池电压档位阈值默认值（mV）；运行时以 net_param 为准 */
 #define POWER_BAT_MV_LVL4   4100  /* 满电 */
 #define POWER_BAT_MV_LVL3   3900
 #define POWER_BAT_MV_LVL2   3700

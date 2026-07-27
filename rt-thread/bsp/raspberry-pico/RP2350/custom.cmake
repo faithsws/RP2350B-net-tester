@@ -36,3 +36,55 @@ if(TARGET rtt_LVGL-net-tester)
         ${CMAKE_CURRENT_SOURCE_DIR}/applications/lvgl/net_tester/net_tester_netops.c
     )
 endif()
+
+# CherryUSB Device CDC ACM（scons --target=cmake 未重新生成时由此强制接入）
+if(TARGET rtt_Drivers)
+    set(_CHERRYUSB_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../components/drivers/usb/cherryusb")
+    include_directories(
+        ${CMAKE_CURRENT_SOURCE_DIR}/board/ports/cherryusb
+        ${_CHERRYUSB_ROOT}
+        ${_CHERRYUSB_ROOT}/common
+        ${_CHERRYUSB_ROOT}/core
+        ${_CHERRYUSB_ROOT}/class/cdc
+        ${_CHERRYUSB_ROOT}/class/hub
+        ${_CHERRYUSB_ROOT}/osal
+        ${_CHERRYUSB_ROOT}/port/rp2040
+    )
+    target_sources(rtt_Drivers PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/board/ports/cherryusb/cherryusb_cdc.c
+        ${_CHERRYUSB_ROOT}/core/usbd_core.c
+        ${_CHERRYUSB_ROOT}/osal/usb_osal_rtthread.c
+        ${_CHERRYUSB_ROOT}/port/rp2040/usb_dc_rp2040.c
+        ${_CHERRYUSB_ROOT}/class/cdc/usbd_cdc_acm.c
+        ${_CHERRYUSB_ROOT}/platform/rtthread/rt_usbd_serial.c
+    )
+endif()
+
+# FAL + 片内 Flash + INI 参数（末尾 param 分区）
+if(TARGET rtt_Drivers)
+    set(_FAL_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../components/fal")
+    set(_DRV_FLASH "${CMAKE_CURRENT_SOURCE_DIR}/../libraries/Drivers/drv_flash.c")
+    set(_HW_FLASH "${CMAKE_CURRENT_SOURCE_DIR}/packages/raspberrypi-pico-rp2350-sdk-latest/src/rp2_common/hardware_flash/flash.c")
+    include_directories(
+        ${CMAKE_CURRENT_SOURCE_DIR}/board/ports/fal
+        ${CMAKE_CURRENT_SOURCE_DIR}/board/ports/param
+        ${_FAL_ROOT}/inc
+        ${CMAKE_CURRENT_SOURCE_DIR}/packages/raspberrypi-pico-rp2350-sdk-latest/src/rp2_common/hardware_xip_cache/include
+    )
+    # 单核：写 Flash 时假定 core1 安全
+    add_compile_definitions(PICO_FLASH_ASSUME_CORE1_SAFE=1)
+    target_sources(rtt_Drivers PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/board/ports/param/net_param.c
+        ${_DRV_FLASH}
+        ${_FAL_ROOT}/src/fal.c
+        ${_FAL_ROOT}/src/fal_flash.c
+        ${_FAL_ROOT}/src/fal_partition.c
+        ${_FAL_ROOT}/src/fal_rtt.c
+    )
+    if(TARGET rtt_raspberrypi-pico-rp2350-sdk)
+        target_sources(rtt_raspberrypi-pico-rp2350-sdk PRIVATE
+            ${_HW_FLASH}
+            ${CMAKE_CURRENT_SOURCE_DIR}/packages/raspberrypi-pico-rp2350-sdk-latest/src/rp2_common/hardware_xip_cache/xip_cache.c
+        )
+    endif()
+endif()

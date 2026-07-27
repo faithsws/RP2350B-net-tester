@@ -757,7 +757,7 @@ TARGET_LINK_LIBRARIES(${CMAKE_PROJECT_NAME}.elf
 ADD_CUSTOM_COMMAND(TARGET ${CMAKE_PROJECT_NAME}.elf POST_BUILD 
 	COMMAND ${CMAKE_OBJCOPY} -O binary ${CMAKE_PROJECT_NAME}.elf rtthread.bin
 	COMMAND ${CMAKE_SIZE} ${CMAKE_PROJECT_NAME}.elf
-	COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/tools/picotool.exe" uf2 convert --quiet ${CMAKE_PROJECT_NAME}.elf ${CMAKE_PROJECT_NAME}.uf2 --family rp2350-arm-s --abs-block
+	COMMAND "D:/temp/picotool/picotool/picotool.exe" uf2 convert ${CMAKE_PROJECT_NAME}.elf rtthread.uf2 --family rp2350-arm-s --abs-block
 )
 
 # if custom.cmake is exist, add it

@@ -1,20 +1,13 @@
 /*
  * 对线判定算法（与 scripts/pair_scan_analyze.py 一致）
+ * 电压阈值来自 net_param（Flash INI），缺省与原宏一致。
  */
 #include "pair_judge.h"
+#include "net_param.h"
 
 #include <string.h>
 
-#define PAIR_TOL_MV          150
-#define PAIR_CONN_REMOTE_MV  5500
-#define PAIR_CONN_H_MV       6700
-#define PAIR_CONN_L_MV       2600
-#define PAIR_SHORT_MH_HI_MV  7300
-#define PAIR_SHORT_MH_MID_MV 4700
-#define PAIR_SHORT_LH_LO_MV  2000
-#define PAIR_SHORT_LH_MID_MV 3600
-
-static int pair_near_mv(uint32_t v_mv, uint32_t target_mv)
+static int pair_near_mv(uint32_t v_mv, uint32_t target_mv, uint32_t tol_mv)
 {
     int d;
 
@@ -27,19 +20,22 @@ static int pair_near_mv(uint32_t v_mv, uint32_t target_mv)
     {
         d = -d;
     }
-    return d <= PAIR_TOL_MV;
+    return d <= (int)tol_mv;
 }
 
 void pair_judge(const pair_volt_cube_t *volt, pair_scan_result_t *out)
 {
+    const net_param_t *p = net_param_get();
     rt_uint8_t h, l, m;
     uint32_t v;
+    uint32_t tol;
 
     if (!volt || !out)
     {
         return;
     }
 
+    tol = p->pair_tol_mv;
     memset(out, 0, sizeof(*out));
     for (h = 0; h < PAIR_CH_COUNT; h++)
     {
@@ -62,19 +58,19 @@ void pair_judge(const pair_volt_cube_t *volt, pair_scan_result_t *out)
                     continue;
                 }
 
-                if (m == h && pair_near_mv(v, PAIR_CONN_H_MV))
+                if (m == h && pair_near_mv(v, p->pair_conn_h_mv, tol))
                 {
                     out->ch_state[h] = PAIR_CH_CONN;
                     out->ch_state[l] = PAIR_CH_CONN;
                     continue;
                 }
-                if (m == l && pair_near_mv(v, PAIR_CONN_L_MV))
+                if (m == l && pair_near_mv(v, p->pair_conn_l_mv, tol))
                 {
                     out->ch_state[h] = PAIR_CH_CONN;
                     out->ch_state[l] = PAIR_CH_CONN;
                     continue;
                 }
-                if (m != h && pair_near_mv(v, PAIR_CONN_REMOTE_MV))
+                if (m != h && pair_near_mv(v, p->pair_conn_remote_mv, tol))
                 {
                     out->ch_state[m] = PAIR_CH_CONN;
                     out->ch_state[h] = PAIR_CH_CONN;
@@ -100,8 +96,8 @@ void pair_judge(const pair_volt_cube_t *volt, pair_scan_result_t *out)
                     continue;
                 }
 
-                if (pair_near_mv(v, PAIR_SHORT_LH_LO_MV) ||
-                    pair_near_mv(v, PAIR_SHORT_LH_MID_MV))
+                if (pair_near_mv(v, p->pair_short_lh_lo_mv, tol) ||
+                    pair_near_mv(v, p->pair_short_lh_mid_mv, tol))
                 {
                     if (out->ch_state[h] == PAIR_CH_CONN &&
                         out->ch_state[l] == PAIR_CH_CONN)
@@ -115,8 +111,8 @@ void pair_judge(const pair_volt_cube_t *volt, pair_scan_result_t *out)
                 }
 
                 if (m != h &&
-                    (pair_near_mv(v, PAIR_SHORT_MH_HI_MV) ||
-                     pair_near_mv(v, PAIR_SHORT_MH_MID_MV)))
+                    (pair_near_mv(v, p->pair_short_mh_hi_mv, tol) ||
+                     pair_near_mv(v, p->pair_short_mh_mid_mv, tol)))
                 {
                     if (out->ch_state[m] == PAIR_CH_CONN &&
                         out->ch_state[h] == PAIR_CH_CONN)

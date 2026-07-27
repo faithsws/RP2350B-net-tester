@@ -47,7 +47,9 @@ scripts\restore_workspace.bat D:\work\RP2350B-RT-Thread
 | 对线 | 共用 H 桥扫描；`pair_judge` 判定断路/联通/短路；单接头 UI |
 | 测序 | 共用扫描电压立方体；`seq_judge` 按标识电阻映射本端→对端线序 |
 | 关于 | 二维码（B站链接）+ SW/HW/UID 明文；Faithsws出品 |
-| 压接 | TX/RX 4051 + SC_PWM 460kHz 扫描；TX/RX 4051 扫描；TX&RX 均值均 <30mV 判定不牢；UI 绿/灰触点 |
+| 压接 | TX/RX 4051 + SC_PWM 460kHz 扫描；阈值可配置（默认 30mV）；UI 绿/灰触点 |
+| USB 串口 | CherryUSB CDC ACM（`2E8A:000A`），枚举后 FinSH 自动切到 `usb-acm0` |
+| 参数存储 | FAL `param` 分区 + INI（压接/对线/测序/电池电压阈值）；`param` FinSH 命令 |
 | 网络调试 | IP/DHCP、Ping、TCP/UDP、DNS、HTTP、ARP、链路闪灯 |
 | 电源/电池 | 升压使能、电池 ADC、充电检测、顶栏电池图标 |
 | 以太网 | CH390 SPI 网卡 + lwIP |
@@ -79,6 +81,8 @@ rt-thread/
 | `hc238/pair_judge` | 对线判定（断路/联通/短路） |
 | `hc238/seq_judge` | 测序判定（`R=7.4/Vmux-2`，标识电阻 ±0.2kΩ） |
 | `mux4051` | TX/RX TMUX4051、LINK4051、对线 ADC(GPIO41)、RX ADC(GPIO45)、`press_scan` |
+| `cherryusb` | 板载 USB CDC ACM + FinSH 切换 |
+| `fal` / `param` | Flash 参数分区表 + INI 读写（`param` 命令） |
 | `battery` / `charger` | 电池电压、适配器/充电状态 |
 | `ec11` | 旋转编码器 |
 | `lcd` | ST7789 显示 |

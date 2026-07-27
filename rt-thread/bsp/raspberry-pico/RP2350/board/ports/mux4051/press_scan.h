@@ -17,8 +17,9 @@ extern "C" {
 /* 每个 RX/TX 对应 7 个异通道采样点，再取均值 */
 #define PRESS_SCAN_RX_AVG_N   (PRESS_SCAN_CH_NUM - 1)
 #define PRESS_SCAN_TX_AVG_N   (PRESS_SCAN_CH_NUM - 1)
-/* TX/RX 均值均低于该阈值 → 该通道压接不牢 */
-#define PRESS_JUDGE_THR_MV    30
+/* TX/RX 均值均低于该阈值 → 该通道压接不牢（默认值；运行时见 press_judge_thr_get） */
+#define PRESS_JUDGE_THR_MV_DEFAULT  30
+#define PRESS_JUDGE_THR_MV          PRESS_JUDGE_THR_MV_DEFAULT
 
 typedef struct
 {
@@ -27,6 +28,10 @@ typedef struct
     /* bit(i)=1：通道 i 压接牢固；bit(i)=0：不牢固 */
     rt_uint8_t status;
 } press_judge_result_t;
+
+/** 压接判定阈值（mV），可由 Flash 参数覆盖 */
+rt_uint32_t press_judge_thr_get(void);
+void press_judge_thr_set(rt_uint32_t mv);
 
 /**
  * 执行一次压接电压扫描。

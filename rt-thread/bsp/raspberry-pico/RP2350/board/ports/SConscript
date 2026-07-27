@@ -10,6 +10,14 @@ path = [cwd, cwd + '/..', cwd + '/battery', cwd + '/charger', cwd + '/pwm', cwd 
 if GetDepend('BSP_USING_CH390'):
     src += ['ch390_port.c']
 
+if GetDepend('RT_USING_CHERRYUSB'):
+    src += ['cherryusb/cherryusb_cdc.c']
+    path += [cwd + '/cherryusb']
+
+if GetDepend('RT_USING_FAL'):
+    src += ['param/net_param.c']
+    path += [cwd + '/param', cwd + '/fal']
+
 group = DefineGroup('Drivers', src, depend = [''], CPPPATH = path)
 
 if GetDepend('BSP_USING_LVGL'):

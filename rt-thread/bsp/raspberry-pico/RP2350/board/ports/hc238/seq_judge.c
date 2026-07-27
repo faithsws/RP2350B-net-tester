@@ -7,6 +7,7 @@
  * 内部用 0.001kΩ 定点数：R_mk = 7400000/v_mv - 2000
  */
 #include "seq_judge.h"
+#include "net_param.h"
 
 #include <string.h>
 
@@ -21,7 +22,9 @@ static const int32_t s_id_r_mk[PAIR_CH_COUNT] = {
 
 static int32_t seq_r_mk_from_mv(uint32_t v_mv)
 {
-    if (v_mv == PAIR_SCAN_INVALID_MV || v_mv < 50u)
+    uint32_t min_mv = net_param_get()->seq_min_mv;
+
+    if (v_mv == PAIR_SCAN_INVALID_MV || v_mv < min_mv)
     {
         return -1;
     }

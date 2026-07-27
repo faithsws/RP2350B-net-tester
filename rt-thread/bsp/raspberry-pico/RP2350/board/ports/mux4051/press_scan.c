@@ -127,10 +127,27 @@ void press_scan_tx_avg(const rt_uint32_t mv[PRESS_SCAN_CH_NUM][PRESS_SCAN_CH_NUM
     }
 }
 
+static rt_uint32_t s_press_judge_thr_mv = PRESS_JUDGE_THR_MV_DEFAULT;
+
+rt_uint32_t press_judge_thr_get(void)
+{
+    return s_press_judge_thr_mv;
+}
+
+void press_judge_thr_set(rt_uint32_t mv)
+{
+    if (mv == 0)
+    {
+        mv = PRESS_JUDGE_THR_MV_DEFAULT;
+    }
+    s_press_judge_thr_mv = mv;
+}
+
 void press_scan_judge(const rt_uint32_t mv[PRESS_SCAN_CH_NUM][PRESS_SCAN_CH_NUM],
                       press_judge_result_t *out)
 {
     rt_uint8_t ch;
+    rt_uint32_t thr = press_judge_thr_get();
 
     if (mv == RT_NULL || out == RT_NULL)
     {
@@ -144,8 +161,7 @@ void press_scan_judge(const rt_uint32_t mv[PRESS_SCAN_CH_NUM][PRESS_SCAN_CH_NUM]
     for (ch = 0; ch < PRESS_SCAN_CH_NUM; ch++)
     {
         /* TX/RX 均值都低于阈值 → 不牢；否则牢固 */
-        if (out->tx_avg_mv[ch] < PRESS_JUDGE_THR_MV &&
-            out->rx_avg_mv[ch] < PRESS_JUDGE_THR_MV)
+        if (out->tx_avg_mv[ch] < thr && out->rx_avg_mv[ch] < thr)
         {
             /* bit 保持 0：不牢固 */
             continue;
@@ -184,7 +200,7 @@ void press_scan_judge_log(const press_judge_result_t *r)
     }
 
     rt_kprintf("\nPress judge thr=%umV, status=0x%02X\n",
-               PRESS_JUDGE_THR_MV, r->status);
+               (unsigned)press_judge_thr_get(), r->status);
     for (ch = 0; ch < PRESS_SCAN_CH_NUM; ch++)
     {
         rt_bool_t ok = (r->status & (1u << ch)) ? RT_TRUE : RT_FALSE;

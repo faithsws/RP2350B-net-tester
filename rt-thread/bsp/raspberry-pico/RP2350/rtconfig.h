@@ -149,6 +149,19 @@
 #define RT_USING_PIN
 #define RT_USING_SPI
 #define RT_USING_CH390
+
+/* CherryUSB：板载 USB Device CDC ACM（FinSH 控制台） */
+#define RT_USING_CHERRYUSB
+#define RT_CHERRYUSB_DEVICE
+#define RT_CHERRYUSB_DEVICE_SPEED_FS
+#define RT_CHERRYUSB_DEVICE_RP2040
+#define RT_CHERRYUSB_DEVICE_CDC_ACM
+#define RT_CHERRYUSB_DEVICE_CDC_ACM_CHARDEV
+
+/* FAL + 片内 Flash：参数分区 */
+#define BSP_USING_ON_CHIP_FLASH
+#define RT_USING_FAL
+#define FAL_PART_HAS_TABLE_CFG
 /* end of Device Drivers */
 
 /* C/C++ and POSIX layer */
